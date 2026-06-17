@@ -52,7 +52,7 @@ class ThinkingLevelChangeEntry(BaseSessionEntry):
 
 
 class CompactionEntry(BaseSessionEntry):
-    """A future context compaction entry."""
+    """A context summary that replaces older message entries during replay."""
 
     type: Literal["compaction"] = "compaction"
     summary: str

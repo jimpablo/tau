@@ -4,6 +4,7 @@ import pytest
 
 from tau_agent import AssistantMessage, UserMessage
 from tau_agent.session import (
+    CompactionEntry,
     CustomEntry,
     JsonlSessionStorage,
     LabelEntry,
@@ -21,6 +22,19 @@ from tau_agent.session import (
 
 def test_session_entry_round_trips_jsonl() -> None:
     entry = MessageEntry(id="entry-1", message=UserMessage(content="Hello"))
+
+    line = entry_to_json_line(entry)
+    parsed = entry_from_json_line(line)
+
+    assert parsed == entry
+
+
+def test_compaction_entry_round_trips_jsonl() -> None:
+    entry = CompactionEntry(
+        id="compact",
+        summary="The user asked about session replay.",
+        replaces_entry_ids=["user", "assistant"],
+    )
 
     line = entry_to_json_line(entry)
     parsed = entry_from_json_line(line)
@@ -71,6 +85,39 @@ def test_session_state_replays_linear_entries() -> None:
     assert state.custom_entries == (entries[4],)
 
 
+def test_session_state_replays_compaction_as_context_summary() -> None:
+    user = MessageEntry(id="user", message=UserMessage(content="Explain sessions."))
+    assistant = MessageEntry(
+        id="assistant",
+        parent_id="user",
+        message=AssistantMessage(content="Sessions are append-only."),
+    )
+    compaction = CompactionEntry(
+        id="compact",
+        parent_id="assistant",
+        summary="The user asked about sessions. The assistant explained append-only replay.",
+        replaces_entry_ids=["user", "assistant"],
+    )
+    followup = MessageEntry(
+        id="followup",
+        parent_id="compact",
+        message=UserMessage(content="Continue."),
+    )
+
+    state = SessionState.from_entries([user, assistant, compaction, followup])
+
+    assert state.messages == (
+        UserMessage(
+            content=(
+                "Previous conversation summary:\n"
+                "The user asked about sessions. The assistant explained append-only replay."
+            )
+        ),
+        UserMessage(content="Continue."),
+    )
+    assert state.compaction_entries == (compaction,)
+
+
 def test_path_to_entry_returns_root_to_leaf_branch() -> None:
     root = MessageEntry(id="root", message=UserMessage(content="Hi"))
     left = MessageEntry(id="left", parent_id="root", message=AssistantMessage(content="Left"))
@@ -89,6 +136,25 @@ def test_session_state_can_replay_one_branch() -> None:
     assert state.messages == (UserMessage(content="Hi"), AssistantMessage(content="Right"))
     assert state.active_leaf_id == "right"
     assert state.entries == (root, right)
+
+
+def test_session_state_replays_compaction_on_active_branch() -> None:
+    root = MessageEntry(id="root", message=UserMessage(content="Root"))
+    left = MessageEntry(id="left", parent_id="root", message=AssistantMessage(content="Left"))
+    compact = CompactionEntry(
+        id="compact",
+        parent_id="left",
+        summary="Root and left branch summary.",
+        replaces_entry_ids=["root", "left"],
+    )
+    right = MessageEntry(id="right", parent_id="root", message=AssistantMessage(content="Right"))
+
+    state = SessionState.from_entries([root, left, compact, right], leaf_id="compact")
+
+    assert state.messages == (
+        UserMessage(content="Previous conversation summary:\nRoot and left branch summary."),
+    )
+    assert state.entries == (root, left, compact)
 
 
 def test_path_to_entry_rejects_missing_parent() -> None:

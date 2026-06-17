@@ -51,7 +51,9 @@ Phase 7 defines these entries:
 - `session_info`
 - `custom`
 
-Some entries, such as `compaction` and `branch_summary`, are placeholders for later phases. They are persisted and replay-safe, but they do not yet alter prompt context.
+Some entries, such as `compaction` and `branch_summary`, were introduced as
+placeholders for later phases. Phase 22 makes `compaction` replay-aware while
+preserving the append-only session file.
 
 ## JSONL storage
 

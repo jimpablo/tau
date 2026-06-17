@@ -2,8 +2,9 @@
 
 from dataclasses import dataclass
 
-from tau_agent.messages import AgentMessage
+from tau_agent.messages import AgentMessage, UserMessage
 from tau_agent.session.entries import (
+    CompactionEntry,
     CustomEntry,
     SessionEntry,
     SessionInfoEntry,
@@ -22,6 +23,7 @@ class SessionState:
     active_leaf_id: str | None
     session_info: SessionInfoEntry | None
     custom_entries: tuple[CustomEntry, ...]
+    compaction_entries: tuple[CompactionEntry, ...]
     entries: tuple[SessionEntry, ...]
 
     @classmethod
@@ -38,18 +40,19 @@ class SessionState:
         """
         replay_entries = path_to_entry(entries, leaf_id) if leaf_id is not None else entries
 
-        messages: list[AgentMessage] = []
+        message_rows: list[tuple[str, AgentMessage]] = []
         model: str | None = None
         thinking_level: str | None = None
         label: str | None = None
         active_leaf_id: str | None = leaf_id
         session_info: SessionInfoEntry | None = None
         custom_entries: list[CustomEntry] = []
+        compaction_entries: list[CompactionEntry] = []
 
         for entry in replay_entries:
             match entry.type:
                 case "message":
-                    messages.append(entry.message)
+                    message_rows.append((entry.id, entry.message))
                 case "model_change":
                     model = entry.model
                 case "thinking_level_change":
@@ -62,16 +65,38 @@ class SessionState:
                     session_info = entry
                 case "custom":
                     custom_entries.append(entry)
-                case "compaction" | "branch_summary":
+                case "compaction":
+                    compaction_entries.append(entry)
+                    message_rows = _apply_compaction(message_rows, entry)
+                case "branch_summary":
                     pass
 
         return cls(
-            messages=tuple(messages),
+            messages=tuple(message for _entry_id, message in message_rows),
             model=model,
             thinking_level=thinking_level,
             label=label,
             active_leaf_id=active_leaf_id,
             session_info=session_info,
             custom_entries=tuple(custom_entries),
+            compaction_entries=tuple(compaction_entries),
             entries=tuple(replay_entries),
         )
+
+
+def _apply_compaction(
+    message_rows: list[tuple[str, AgentMessage]],
+    entry: CompactionEntry,
+) -> list[tuple[str, AgentMessage]]:
+    replaced_ids = set(entry.replaces_entry_ids)
+    retained = [
+        (entry_id, message)
+        for entry_id, message in message_rows
+        if entry_id not in replaced_ids
+    ]
+    retained.append((entry.id, UserMessage(content=_format_compaction_summary(entry.summary))))
+    return retained
+
+
+def _format_compaction_summary(summary: str) -> str:
+    return f"Previous conversation summary:\n{summary}"

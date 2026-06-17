@@ -41,5 +41,6 @@ The most important boundary is that `tau_agent` should stay portable. It can def
 - [Phase 18: Provider Configuration Foundation](phase-18-provider-config-foundation.md)
 - [Phase 19: Project Context Discovery and Reload](phase-19-context-discovery.md)
 - [Phase 20: Installation and Configuration Docs](phase-20-installation-docs.md)
+- [Phase 22: Compaction Replay Foundation](phase-22-compaction-foundation.md)
 
 More pages will be added here as each phase lands.
