@@ -44,6 +44,9 @@ class CommandSession(Protocol):
     def context_files(self) -> Sequence[ProjectContextFile]: ...
 
     @property
+    def context_token_estimate(self) -> int: ...
+
+    @property
     def resource_diagnostics(self) -> Sequence[ResourceDiagnostic]: ...
 
     @property
@@ -281,6 +284,7 @@ def _status_command(context: CommandContext) -> CommandResult:
         f"Skills: {len(session.skills)}",
         f"Prompt templates: {len(session.prompt_templates)}",
         f"Context files: {len(session.context_files)}",
+        f"Estimated context tokens: {session.context_token_estimate}",
         f"Resource diagnostics: {len(session.resource_diagnostics)}",
     ]
     if session.session_id is not None:

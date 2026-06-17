@@ -10,6 +10,12 @@ from tau_coding.context import (
     discover_project_context,
     discover_project_context_with_diagnostics,
 )
+from tau_coding.context_window import (
+    estimate_context_tokens,
+    estimate_message_tokens,
+    estimate_text_tokens,
+    estimate_tool_tokens,
+)
 from tau_coding.paths import TauPaths
 from tau_coding.prompt_templates import (
     PromptTemplate,
@@ -127,6 +133,10 @@ __all__ = [
     "default_openai_provider_config",
     "discover_project_context",
     "discover_project_context_with_diagnostics",
+    "estimate_context_tokens",
+    "estimate_message_tokens",
+    "estimate_text_tokens",
+    "estimate_tool_tokens",
     "expand_skill_command",
     "format_available_tools",
     "format_guidelines",

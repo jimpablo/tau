@@ -29,6 +29,7 @@ class FakeSession:
         self.context_files = (
             ProjectContextFile(path=str(tmp_path / "AGENTS.md"), content="Follow instructions."),
         )
+        self.context_token_estimate = 123
         self.resource_diagnostics = ()
         self.session_id = "session-1"
         self.session_manager: SessionManager | None = manager
@@ -82,6 +83,7 @@ def test_status_includes_session_details(tmp_path: Path) -> None:
     assert "Tools: 4" in result.message
     assert "Skills: 1" in result.message
     assert "Context files: 1" in result.message
+    assert "Estimated context tokens: 123" in result.message
     assert "Resource diagnostics: 0" in result.message
     assert "Session: session-1" in result.message
 

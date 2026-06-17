@@ -40,6 +40,7 @@ class FakeSession:
         self.context_files = (
             ProjectContextFile(path=str(self.cwd / "AGENTS.md"), content="Follow rules."),
         )
+        self.context_token_estimate = 123
         self.resource_diagnostics = ()
 
     def handle_command(self, text: str) -> CommandResult:

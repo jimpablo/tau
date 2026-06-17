@@ -8,6 +8,9 @@ The implementation lives in:
 ```text
 src/tau_agent/session/entries.py
 src/tau_agent/session/memory.py
+src/tau_coding/context_window.py
+src/tau_coding/session.py
+src/tau_coding/commands.py
 ```
 
 ## What was added
@@ -40,14 +43,35 @@ SessionState.messages = reconstructed active context
 Future `/compact` work can append `CompactionEntry` values without editing or
 deleting old entries.
 
+## Context Size Estimation
+
+Tau now has deterministic approximate context-size helpers in `tau_coding`:
+
+```python
+estimate_text_tokens(...)
+estimate_message_tokens(...)
+estimate_tool_tokens(...)
+estimate_context_tokens(...)
+```
+
+These helpers intentionally use a rough character-based estimate instead of a
+provider-specific tokenizer. `/status` surfaces the current estimate as:
+
+```text
+Estimated context tokens: <count>
+```
+
+This gives future automatic compaction thresholds a stable application-layer
+primitive without adding tokenizer policy to `tau_agent`.
+
 ## Boundary
 
 This foundation is in `tau_agent` because replaying session entries is a
 portable harness concern. It does not know about slash commands, Textual, Rich,
 Tau home paths, token thresholds, or which model creates a summary.
 
-Command UX, token estimation, automatic thresholds, and model-generated
-summaries belong in later `tau_coding` work.
+Token estimation and command UX live in `tau_coding`. Automatic thresholds and
+model-generated summaries belong in later `tau_coding` work.
 
 ## Tests
 
@@ -55,6 +79,8 @@ The phase is covered by:
 
 ```text
 tests/test_session.py
+tests/test_context_window.py
+tests/test_commands.py
 ```
 
 The tests verify:
@@ -62,3 +88,5 @@ The tests verify:
 - compaction entries round-trip through JSONL
 - linear replay replaces compacted messages with a summary
 - branch replay applies compaction only on the active branch path
+- context-size estimation is deterministic
+- `/status` includes an estimated context token count
