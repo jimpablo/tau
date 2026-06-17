@@ -50,7 +50,9 @@ Example:
       "api_key_env": "LOCAL_API_KEY",
       "models": ["qwen", "llama"],
       "default_model": "qwen",
-      "timeout_seconds": 120
+      "timeout_seconds": 120,
+      "max_retries": 2,
+      "max_retry_delay_seconds": 0.5
     }
   ]
 }
@@ -58,13 +60,15 @@ Example:
 
 API keys are not written to this file. Each provider entry names the environment
 variable that should contain its API key. `timeout_seconds` is optional and
-defaults to `60`; when present, it must be greater than zero.
+defaults to `60`; when present, it must be greater than zero. `max_retries`
+defaults to `0`, and `max_retry_delay_seconds` defaults to `1`; both must be
+zero or greater.
 
 Useful commands:
 
 ```bash
 tau providers
-tau --provider local --model qwen --timeout-seconds 120 setup
+tau --provider local --model qwen --timeout-seconds 120 --max-retries 2 setup
 ```
 
 Inside the TUI:

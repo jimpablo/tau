@@ -26,6 +26,13 @@ Optionally tune the HTTP timeout used by the default OpenAI-compatible provider:
 export OPENAI_TIMEOUT_SECONDS="120"
 ```
 
+Optionally tune transient request retries:
+
+```bash
+export OPENAI_MAX_RETRIES="2"
+export OPENAI_MAX_RETRY_DELAY_SECONDS="0.5"
+```
+
 The provider uses `/chat/completions` with streaming enabled.
 
 ## Durable Provider Config
@@ -49,12 +56,15 @@ tau --provider local \
   --base-url http://localhost:11434/v1 \
   --api-key-env LOCAL_API_KEY \
   --timeout-seconds 120 \
+  --max-retries 2 \
+  --max-retry-delay-seconds 0.5 \
   --model qwen \
   setup
 ```
 
-Provider entries can also include `timeout_seconds` in `~/.tau/providers.json`.
-The value must be greater than zero.
+Provider entries can also include `timeout_seconds`, `max_retries`, and
+`max_retry_delay_seconds` in `~/.tau/providers.json`. Timeout must be greater
+than zero; retry count and retry delay must be zero or greater.
 
 Run Tau with a configured provider:
 

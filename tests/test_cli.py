@@ -416,6 +416,10 @@ def test_setup_command_writes_provider_settings(
             "LOCAL_API_KEY",
             "--timeout-seconds",
             "120",
+            "--max-retries",
+            "2",
+            "--max-retry-delay-seconds",
+            "0.5",
             "--model",
             "qwen",
             "setup",
@@ -431,6 +435,8 @@ def test_setup_command_writes_provider_settings(
     assert provider.api_key_env == "LOCAL_API_KEY"
     assert provider.default_model == "qwen"
     assert provider.timeout_seconds == 120
+    assert provider.max_retries == 2
+    assert provider.max_retry_delay_seconds == 0.5
 
 
 def test_setup_command_warns_when_api_key_env_is_missing(

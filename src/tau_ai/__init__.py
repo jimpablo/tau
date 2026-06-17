@@ -1,6 +1,8 @@
 """Provider and model streaming layer for Tau."""
 
 from tau_ai.env import (
+    DEFAULT_OPENAI_COMPATIBLE_MAX_RETRIES,
+    DEFAULT_OPENAI_COMPATIBLE_MAX_RETRY_DELAY_SECONDS,
     DEFAULT_OPENAI_COMPATIBLE_TIMEOUT_SECONDS,
     OpenAICompatibleConfig,
     openai_compatible_config_from_env,
@@ -19,6 +21,8 @@ from tau_ai.provider import CancellationToken, ModelProvider
 
 __all__ = [
     "CancellationToken",
+    "DEFAULT_OPENAI_COMPATIBLE_MAX_RETRIES",
+    "DEFAULT_OPENAI_COMPATIBLE_MAX_RETRY_DELAY_SECONDS",
     "DEFAULT_OPENAI_COMPATIBLE_TIMEOUT_SECONDS",
     "FakeProvider",
     "ModelProvider",

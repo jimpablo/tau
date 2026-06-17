@@ -9,6 +9,8 @@ import typer
 
 from tau_agent.session import SessionEntry, SessionStorage
 from tau_ai import (
+    DEFAULT_OPENAI_COMPATIBLE_MAX_RETRIES,
+    DEFAULT_OPENAI_COMPATIBLE_MAX_RETRY_DELAY_SECONDS,
     DEFAULT_OPENAI_COMPATIBLE_TIMEOUT_SECONDS,
     ModelProvider,
     OpenAICompatibleProvider,
@@ -52,6 +54,8 @@ def setup_command(
     api_key_env: str = "OPENAI_API_KEY",
     model: str = DEFAULT_MODEL,
     timeout_seconds: float = DEFAULT_OPENAI_COMPATIBLE_TIMEOUT_SECONDS,
+    max_retries: int = DEFAULT_OPENAI_COMPATIBLE_MAX_RETRIES,
+    max_retry_delay_seconds: float = DEFAULT_OPENAI_COMPATIBLE_MAX_RETRY_DELAY_SECONDS,
     set_default: bool = True,
 ) -> None:
     """Create or update an OpenAI-compatible provider entry."""
@@ -63,6 +67,8 @@ def setup_command(
         models=(model,),
         default_model=model,
         timeout_seconds=timeout_seconds,
+        max_retries=max_retries,
+        max_retry_delay_seconds=max_retry_delay_seconds,
     )
     updated = upsert_openai_compatible_provider(settings, provider, set_default=set_default)
     path = save_provider_settings(updated)
@@ -105,6 +111,17 @@ def main(
             help="HTTP timeout in seconds for `tau setup` provider requests.",
         ),
     ] = DEFAULT_OPENAI_COMPATIBLE_TIMEOUT_SECONDS,
+    setup_max_retries: Annotated[
+        int,
+        typer.Option("--max-retries", help="Provider retry count for `tau setup`."),
+    ] = DEFAULT_OPENAI_COMPATIBLE_MAX_RETRIES,
+    setup_max_retry_delay_seconds: Annotated[
+        float,
+        typer.Option(
+            "--max-retry-delay-seconds",
+            help="Provider retry delay in seconds for `tau setup`.",
+        ),
+    ] = DEFAULT_OPENAI_COMPATIBLE_MAX_RETRY_DELAY_SECONDS,
     setup_default: Annotated[
         bool,
         typer.Option("--set-default/--no-set-default", help="Make setup provider the default."),
@@ -160,6 +177,8 @@ def main(
             api_key_env=setup_api_key_env,
             model=model or DEFAULT_MODEL,
             timeout_seconds=setup_timeout_seconds,
+            max_retries=setup_max_retries,
+            max_retry_delay_seconds=setup_max_retry_delay_seconds,
             set_default=setup_default,
         )
         raise typer.Exit()
@@ -229,7 +248,9 @@ def render_provider_settings(settings: ProviderSettings) -> None:
         typer.echo(
             f"{marker}\t{provider.name}\topenai-compatible\t"
             f"{provider.default_model}\t{models}\t{provider.api_key_env}\t"
-            f"{provider.base_url}\t{provider.timeout_seconds:g}s"
+            f"{provider.base_url}\t{provider.timeout_seconds:g}s\t"
+            f"retries={provider.max_retries}\t"
+            f"retry_delay={provider.max_retry_delay_seconds:g}s"
         )
 
 

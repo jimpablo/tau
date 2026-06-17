@@ -1,5 +1,6 @@
 """OpenAI-compatible chat completions provider."""
 
+from asyncio import sleep
 from collections.abc import AsyncIterator, Mapping
 from json import JSONDecodeError, dumps, loads
 from typing import Any
@@ -64,68 +65,98 @@ class OpenAICompatibleProvider:
 
             yield ProviderResponseStartEvent(model=model)
 
-            try:
-                async with client.stream("POST", url, json=payload, headers=headers) as response:
-                    if response.status_code >= 400:
-                        body = await response.aread()
-                        yield ProviderErrorEvent(
-                            message=f"Provider request failed with status {response.status_code}",
-                            data={"body": body.decode(errors="replace")},
+            attempt = 0
+            while True:
+                emitted_content = False
+                try:
+                    async with client.stream(
+                        "POST", url, json=payload, headers=headers
+                    ) as response:
+                        if response.status_code >= 400:
+                            body = await response.aread()
+                            if await self._should_retry(attempt, status_code=response.status_code):
+                                attempt += 1
+                                continue
+                            yield ProviderErrorEvent(
+                                message=(
+                                    "Provider request failed with status "
+                                    f"{response.status_code}"
+                                ),
+                                data={
+                                    "body": body.decode(errors="replace"),
+                                    "attempts": attempt + 1,
+                                },
+                            )
+                            return
+
+                        content_parts: list[str] = []
+                        tool_call_builders: dict[int, _ToolCallBuilder] = {}
+                        finish_reason: str | None = None
+
+                        async for line in response.aiter_lines():
+                            if signal is not None and signal.is_cancelled():
+                                return
+
+                            event = _parse_sse_line(line)
+                            if event is None:
+                                continue
+                            if event == "[DONE]":
+                                break
+
+                            chunk = _loads_object(event)
+                            if chunk is None:
+                                yield ProviderErrorEvent(
+                                    message="Provider returned invalid JSON chunk"
+                                )
+                                return
+
+                            choice = _first_choice(chunk)
+                            if choice is None:
+                                continue
+
+                            finish_reason = choice.get("finish_reason") or finish_reason
+                            delta = choice.get("delta")
+                            if not isinstance(delta, Mapping):
+                                continue
+
+                            content = delta.get("content")
+                            if isinstance(content, str) and content:
+                                emitted_content = True
+                                content_parts.append(content)
+                                yield ProviderTextDeltaEvent(delta=content)
+
+                            for tool_call_delta in _tool_call_deltas(delta):
+                                emitted_content = True
+                                index = int(tool_call_delta.get("index", 0))
+                                builder = tool_call_builders.setdefault(
+                                    index, _ToolCallBuilder()
+                                )
+                                builder.add_delta(tool_call_delta)
+
+                        tool_calls = [
+                            builder.build(index)
+                            for index, builder in sorted(tool_call_builders.items())
+                        ]
+                        for tool_call in tool_calls:
+                            yield ProviderToolCallEvent(tool_call=tool_call)
+
+                        message = AssistantMessage(
+                            content="".join(content_parts),
+                            tool_calls=tool_calls,
+                        )
+                        yield ProviderResponseEndEvent(
+                            message=message, finish_reason=finish_reason
                         )
                         return
-
-                    content_parts: list[str] = []
-                    tool_call_builders: dict[int, _ToolCallBuilder] = {}
-                    finish_reason: str | None = None
-
-                    async for line in response.aiter_lines():
-                        if signal is not None and signal.is_cancelled():
-                            return
-
-                        event = _parse_sse_line(line)
-                        if event is None:
-                            continue
-                        if event == "[DONE]":
-                            break
-
-                        chunk = _loads_object(event)
-                        if chunk is None:
-                            yield ProviderErrorEvent(message="Provider returned invalid JSON chunk")
-                            return
-
-                        choice = _first_choice(chunk)
-                        if choice is None:
-                            continue
-
-                        finish_reason = choice.get("finish_reason") or finish_reason
-                        delta = choice.get("delta")
-                        if not isinstance(delta, Mapping):
-                            continue
-
-                        content = delta.get("content")
-                        if isinstance(content, str) and content:
-                            content_parts.append(content)
-                            yield ProviderTextDeltaEvent(delta=content)
-
-                        for tool_call_delta in _tool_call_deltas(delta):
-                            index = int(tool_call_delta.get("index", 0))
-                            builder = tool_call_builders.setdefault(index, _ToolCallBuilder())
-                            builder.add_delta(tool_call_delta)
-
-                    tool_calls = [
-                        builder.build(index)
-                        for index, builder in sorted(tool_call_builders.items())
-                    ]
-                    for tool_call in tool_calls:
-                        yield ProviderToolCallEvent(tool_call=tool_call)
-
-                    message = AssistantMessage(
-                        content="".join(content_parts),
-                        tool_calls=tool_calls,
+                except httpx.HTTPError as exc:
+                    if not emitted_content and await self._should_retry(attempt):
+                        attempt += 1
+                        continue
+                    yield ProviderErrorEvent(
+                        message=str(exc),
+                        data={"attempts": attempt + 1},
                     )
-                    yield ProviderResponseEndEvent(message=message, finish_reason=finish_reason)
-            except httpx.HTTPError as exc:
-                yield ProviderErrorEvent(message=str(exc))
+                    return
 
         return iterator()
 
@@ -133,6 +164,15 @@ class OpenAICompatibleProvider:
         if self._client is None:
             self._client = httpx.AsyncClient(timeout=self._config.timeout_seconds)
         return self._client
+
+    async def _should_retry(self, attempt: int, *, status_code: int | None = None) -> bool:
+        if attempt >= self._config.max_retries:
+            return False
+        if status_code is not None and not _is_transient_status(status_code):
+            return False
+        if self._config.max_retry_delay_seconds:
+            await sleep(self._config.max_retry_delay_seconds)
+        return True
 
 
 class _ToolCallBuilder:
@@ -270,3 +310,7 @@ def _tool_call_deltas(delta: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     if not isinstance(tool_calls, list):
         return []
     return [tool_call for tool_call in tool_calls if isinstance(tool_call, Mapping)]
+
+
+def _is_transient_status(status_code: int) -> bool:
+    return status_code in {408, 409, 425, 429} or status_code >= 500

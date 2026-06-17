@@ -10,6 +10,7 @@ from tau_ai import (
     FakeProvider,
     OpenAICompatibleConfig,
     OpenAICompatibleProvider,
+    ProviderErrorEvent,
     ProviderResponseEndEvent,
     ProviderResponseStartEvent,
     ProviderTextDeltaEvent,
@@ -49,12 +50,16 @@ def test_openai_compatible_config_from_env(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://example.test/v1/")
     monkeypatch.setenv("OPENAI_TIMEOUT_SECONDS", "12.5")
+    monkeypatch.setenv("OPENAI_MAX_RETRIES", "2")
+    monkeypatch.setenv("OPENAI_MAX_RETRY_DELAY_SECONDS", "0.25")
 
     config = openai_compatible_config_from_env()
 
     assert config.api_key == "test-key"
     assert config.base_url == "https://example.test/v1"
     assert config.timeout_seconds == 12.5
+    assert config.max_retries == 2
+    assert config.max_retry_delay_seconds == 0.25
 
 
 def test_openai_compatible_config_from_env_rejects_invalid_timeout(
@@ -64,6 +69,16 @@ def test_openai_compatible_config_from_env_rejects_invalid_timeout(
     monkeypatch.setenv("OPENAI_TIMEOUT_SECONDS", "0")
 
     with pytest.raises(RuntimeError, match="greater than 0"):
+        openai_compatible_config_from_env()
+
+
+def test_openai_compatible_config_from_env_rejects_invalid_retry_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_MAX_RETRIES", "-1")
+
+    with pytest.raises(RuntimeError, match="0 or greater"):
         openai_compatible_config_from_env()
 
 
@@ -207,3 +222,81 @@ async def test_openai_compatible_provider_streams_tool_calls() -> None:
         ToolCall(id="call-1", name="read", arguments={"path": "README.md"})
     ]
     assert events[-1].finish_reason == "tool_calls"
+
+
+@pytest.mark.anyio
+async def test_openai_compatible_provider_retries_transient_status() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if len(requests) == 1:
+            return httpx.Response(500, text="try again")
+        return httpx.Response(
+            200,
+            text=(
+                'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\n'
+                "data: [DONE]\n\n"
+            ),
+            headers={"content-type": "text/event-stream"},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = OpenAICompatibleProvider(
+            OpenAICompatibleConfig(
+                api_key="test-key",
+                base_url="https://example.test/v1",
+                max_retries=1,
+                max_retry_delay_seconds=0,
+            ),
+            client=client,
+        )
+
+        events = await _collect(
+            provider.stream_response(
+                model="test-model",
+                system="You are Tau.",
+                messages=[UserMessage(content="Say ok")],
+                tools=[],
+            )
+        )
+
+    assert len(requests) == 2
+    assert [event.type for event in events] == [
+        "response_start",
+        "text_delta",
+        "response_end",
+    ]
+
+
+@pytest.mark.anyio
+async def test_openai_compatible_provider_does_not_retry_non_transient_status() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(400, text="bad request")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = OpenAICompatibleProvider(
+            OpenAICompatibleConfig(
+                api_key="test-key",
+                base_url="https://example.test/v1",
+                max_retries=3,
+                max_retry_delay_seconds=0,
+            ),
+            client=client,
+        )
+
+        events = await _collect(
+            provider.stream_response(
+                model="test-model",
+                system="You are Tau.",
+                messages=[UserMessage(content="Say ok")],
+                tools=[],
+            )
+        )
+
+    assert len(requests) == 1
+    assert isinstance(events[-1], ProviderErrorEvent)
+    assert events[-1].data == {"body": "bad request", "attempts": 1}

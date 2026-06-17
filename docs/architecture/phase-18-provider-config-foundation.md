@@ -37,6 +37,7 @@ model: gpt-4.1-mini
 api key env var: OPENAI_API_KEY
 base URL env var: OPENAI_BASE_URL
 timeout env var: OPENAI_TIMEOUT_SECONDS
+retry env vars: OPENAI_MAX_RETRIES, OPENAI_MAX_RETRY_DELAY_SECONDS
 ```
 
 API keys are not stored in the config file. Provider entries name the
@@ -55,7 +56,9 @@ environment variable that should hold the key.
       "api_key_env": "LOCAL_API_KEY",
       "models": ["qwen", "llama"],
       "default_model": "qwen",
-      "timeout_seconds": 120
+      "timeout_seconds": 120,
+      "max_retries": 2,
+      "max_retry_delay_seconds": 0.5
     }
   ]
 }
@@ -89,6 +92,8 @@ tau --provider local \
   --base-url http://localhost:11434/v1 \
   --api-key-env LOCAL_API_KEY \
   --timeout-seconds 120 \
+  --max-retries 2 \
+  --max-retry-delay-seconds 0.5 \
   --model qwen \
   setup
 ```
@@ -102,6 +107,12 @@ Provider HTTP timeouts are configurable through `timeout_seconds` in
 `~/.tau/providers.json`. The default OpenAI-compatible provider can also read
 `OPENAI_TIMEOUT_SECONDS`. The configured value is passed to the HTTPX streaming
 client instead of keeping timeout behavior hardcoded in the provider adapter.
+
+Transient retry behavior is configurable through `max_retries` and
+`max_retry_delay_seconds`, or through `OPENAI_MAX_RETRIES` and
+`OPENAI_MAX_RETRY_DELAY_SECONDS` for the default provider. Tau retries transient
+HTTP statuses such as 429 and 5xx responses, plus HTTP transport errors before
+any partial stream content has been emitted.
 
 ## Slash commands
 
@@ -152,7 +163,7 @@ The tests verify:
 - missing config falls back to OpenAI-compatible defaults
 - provider settings round-trip through `~/.tau/providers.json`
 - provider setup and listing CLI behavior
-- provider HTTP timeout parsing and runtime config forwarding
+- provider HTTP timeout and retry parsing plus runtime config forwarding
 - default provider/model selection
 - configured API key environment variables
 - CLI provider/model forwarding

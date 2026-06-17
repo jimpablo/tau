@@ -37,6 +37,8 @@ def test_save_and_load_provider_settings_round_trip(tmp_path: Path) -> None:
                 models=("qwen", "llama"),
                 default_model="qwen",
                 timeout_seconds=120,
+                max_retries=2,
+                max_retry_delay_seconds=0.5,
             ),
         ),
     )
@@ -118,6 +120,8 @@ def test_openai_compatible_config_from_provider_uses_configured_env_var(
     assert config.api_key == "test-key"
     assert config.base_url == "http://localhost:11434/v1"
     assert config.timeout_seconds == 60.0
+    assert config.max_retries == 0
+    assert config.max_retry_delay_seconds == 1.0
 
 
 def test_openai_compatible_config_from_provider_uses_configured_timeout(
@@ -131,11 +135,15 @@ def test_openai_compatible_config_from_provider_uses_configured_timeout(
         models=("qwen",),
         default_model="qwen",
         timeout_seconds=180,
+        max_retries=3,
+        max_retry_delay_seconds=0.25,
     )
 
     config = openai_compatible_config_from_provider(provider)
 
     assert config.timeout_seconds == 180
+    assert config.max_retries == 3
+    assert config.max_retry_delay_seconds == 0.25
 
 
 def test_provider_settings_from_json_rejects_invalid_timeout() -> None:
@@ -161,3 +169,30 @@ def test_provider_settings_from_json_rejects_invalid_timeout() -> None:
 def test_openai_compatible_provider_config_rejects_invalid_timeout() -> None:
     with pytest.raises(ProviderConfigError, match="greater than 0"):
         OpenAICompatibleProviderConfig(name="local", timeout_seconds=0)
+
+
+def test_provider_settings_from_json_rejects_invalid_retries() -> None:
+    with pytest.raises(ProviderConfigError, match="0 or greater"):
+        provider_settings_from_json(
+            {
+                "default_provider": "local",
+                "providers": [
+                    {
+                        "type": "openai-compatible",
+                        "name": "local",
+                        "base_url": "http://localhost:11434/v1",
+                        "api_key_env": "LOCAL_API_KEY",
+                        "models": ["qwen"],
+                        "default_model": "qwen",
+                        "max_retries": -1,
+                    }
+                ],
+            }
+        )
+
+
+def test_openai_compatible_provider_config_rejects_invalid_retries() -> None:
+    with pytest.raises(ProviderConfigError, match="0 or greater"):
+        OpenAICompatibleProviderConfig(name="local", max_retries=-1)
+    with pytest.raises(ProviderConfigError, match="0 or greater"):
+        OpenAICompatibleProviderConfig(name="local", max_retry_delay_seconds=-1)

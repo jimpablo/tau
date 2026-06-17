@@ -75,6 +75,7 @@ run still remains non-interactive and script-friendly, but it now shares:
 - built-in coding tools
 - append-only session persistence under `~/.tau/sessions/`
 - the same provider/model resolution used by the TUI
+- configured provider timeout and retry settings
 
 This keeps the user-facing command simple while reducing drift between print
 mode and interactive mode.

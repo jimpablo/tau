@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from tau_ai import (
+    DEFAULT_OPENAI_COMPATIBLE_MAX_RETRIES,
+    DEFAULT_OPENAI_COMPATIBLE_MAX_RETRY_DELAY_SECONDS,
     DEFAULT_OPENAI_COMPATIBLE_TIMEOUT_SECONDS,
     OpenAICompatibleConfig,
     openai_compatible_config_from_env,
@@ -32,10 +34,26 @@ class OpenAICompatibleProviderConfig:
     models: tuple[str, ...] = (DEFAULT_MODEL,)
     default_model: str = DEFAULT_MODEL
     timeout_seconds: float = DEFAULT_OPENAI_COMPATIBLE_TIMEOUT_SECONDS
+    max_retries: int = DEFAULT_OPENAI_COMPATIBLE_MAX_RETRIES
+    max_retry_delay_seconds: float = DEFAULT_OPENAI_COMPATIBLE_MAX_RETRY_DELAY_SECONDS
 
     def __post_init__(self) -> None:
         if isinstance(self.timeout_seconds, bool) or self.timeout_seconds <= 0:
             raise ProviderConfigError("Provider timeout_seconds must be greater than 0")
+        if (
+            not isinstance(self.max_retries, int)
+            or isinstance(self.max_retries, bool)
+            or self.max_retries < 0
+        ):
+            raise ProviderConfigError("Provider max_retries must be 0 or greater")
+        if (
+            not isinstance(self.max_retry_delay_seconds, int | float)
+            or isinstance(self.max_retry_delay_seconds, bool)
+            or self.max_retry_delay_seconds < 0
+        ):
+            raise ProviderConfigError(
+                "Provider max_retry_delay_seconds must be 0 or greater"
+            )
 
     def to_json(self) -> dict[str, Any]:
         """Serialize this provider config to JSON-compatible data."""
@@ -47,6 +65,8 @@ class OpenAICompatibleProviderConfig:
             "models": list(self.models),
             "default_model": self.default_model,
             "timeout_seconds": self.timeout_seconds,
+            "max_retries": self.max_retries,
+            "max_retry_delay_seconds": self.max_retry_delay_seconds,
         }
 
 
@@ -168,6 +188,9 @@ def openai_compatible_config_from_provider(
         and provider.api_key_env == "OPENAI_API_KEY"
         and provider.base_url == DEFAULT_OPENAI_COMPATIBLE_BASE_URL
         and provider.timeout_seconds == DEFAULT_OPENAI_COMPATIBLE_TIMEOUT_SECONDS
+        and provider.max_retries == DEFAULT_OPENAI_COMPATIBLE_MAX_RETRIES
+        and provider.max_retry_delay_seconds
+        == DEFAULT_OPENAI_COMPATIBLE_MAX_RETRY_DELAY_SECONDS
     ):
         return openai_compatible_config_from_env(base_url_var="OPENAI_BASE_URL")
     api_key = environ.get(provider.api_key_env)
@@ -177,6 +200,8 @@ def openai_compatible_config_from_provider(
         api_key=api_key,
         base_url=provider.base_url.rstrip("/"),
         timeout_seconds=provider.timeout_seconds,
+        max_retries=provider.max_retries,
+        max_retry_delay_seconds=provider.max_retry_delay_seconds,
     )
 
 
@@ -195,6 +220,17 @@ def _provider_from_json(data: object) -> OpenAICompatibleProviderConfig:
         data.get("timeout_seconds", DEFAULT_OPENAI_COMPATIBLE_TIMEOUT_SECONDS),
         f"providers[{name}].timeout_seconds",
     )
+    max_retries = _non_negative_int(
+        data.get("max_retries", DEFAULT_OPENAI_COMPATIBLE_MAX_RETRIES),
+        f"providers[{name}].max_retries",
+    )
+    max_retry_delay_seconds = _non_negative_float(
+        data.get(
+            "max_retry_delay_seconds",
+            DEFAULT_OPENAI_COMPATIBLE_MAX_RETRY_DELAY_SECONDS,
+        ),
+        f"providers[{name}].max_retry_delay_seconds",
+    )
     if default_model not in models:
         models = (*models, default_model)
     return OpenAICompatibleProviderConfig(
@@ -204,6 +240,8 @@ def _provider_from_json(data: object) -> OpenAICompatibleProviderConfig:
         models=models,
         default_model=default_model,
         timeout_seconds=timeout_seconds,
+        max_retries=max_retries,
+        max_retry_delay_seconds=max_retry_delay_seconds,
     )
 
 
@@ -228,4 +266,21 @@ def _positive_float(value: object, field_name: str) -> float:
     converted = float(value)
     if converted <= 0:
         raise ProviderConfigError(f"Provider field must be greater than 0: {field_name}")
+    return converted
+
+
+def _non_negative_int(value: object, field_name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ProviderConfigError(f"Provider field must be a non-negative integer: {field_name}")
+    if value < 0:
+        raise ProviderConfigError(f"Provider field must be 0 or greater: {field_name}")
+    return value
+
+
+def _non_negative_float(value: object, field_name: str) -> float:
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        raise ProviderConfigError(f"Provider field must be a non-negative number: {field_name}")
+    converted = float(value)
+    if converted < 0:
+        raise ProviderConfigError(f"Provider field must be 0 or greater: {field_name}")
     return converted
