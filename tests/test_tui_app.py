@@ -288,7 +288,7 @@ def test_chat_items_render_fenced_code_without_markers() -> None:
 def test_tool_chat_items_hide_and_show_result_text() -> None:
     item = ChatItem(
         role="tool",
-        text="→ read {'path': 'README.md'}",
+        text="→ read README.md",
         tool_result_text="✓ read\nfull file contents",
     )
 
@@ -526,7 +526,7 @@ def test_tui_app_loads_restored_messages_into_display_state() -> None:
         ("assistant", "I'll inspect it.", None),
         (
             "tool",
-            "→ edit {'path': 'README.md'}",
+            "→ edit README.md",
             "✓ edit\n"
             "Successfully replaced 1 block.\n"
             "\n"
@@ -1258,7 +1258,7 @@ async def test_tui_prompt_worker_refreshes_context_after_message_changes() -> No
     assert [(item.role, item.text, item.tool_result_text) for item in app.state.items] == [
         ("user", "read README", None),
         ("assistant", "Using a tool.", None),
-        ("tool", "→ read {'path': 'README.md'}", "✓ read\ncontents"),
+        ("tool", "→ read README.md", "✓ read\ncontents"),
     ]
 
 
