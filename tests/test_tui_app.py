@@ -7,7 +7,7 @@ from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from textual.containers import VerticalScroll
-from textual.widgets import Input, Label, ListView, TextArea
+from textual.widgets import Button, Input, Label, ListView, TextArea
 
 from tau_agent import (
     AgentEndEvent,
@@ -33,6 +33,7 @@ from tau_coding.tools import create_coding_tools
 from tau_coding.tui import app as tui_app
 from tau_coding.tui.app import (
     CommandOutputScreen,
+    LoginMethodPickerScreen,
     LoginProviderPickerScreen,
     LoginScreen,
     ModelPickerScreen,
@@ -967,7 +968,7 @@ async def test_tui_login_openai_codex_saves_oauth_credentials(
 
 
 @pytest.mark.anyio
-async def test_tui_login_opens_provider_picker() -> None:
+async def test_tui_login_opens_method_picker() -> None:
     app = TauTuiApp(FakeSession())
 
     async with app.run_test() as pilot:
@@ -976,14 +977,54 @@ async def test_tui_login_opens_provider_picker() -> None:
         await pilot.press("enter")
         await pilot.pause()
 
+        assert isinstance(app.screen, LoginMethodPickerScreen)
+        assert str(app.screen.query_one("#login-method-subscription", Button).label) == (
+            "Subscription"
+        )
+        assert str(app.screen.query_one("#login-method-api-key", Button).label) == "API key"
+
+
+@pytest.mark.anyio
+async def test_tui_login_subscription_opens_oauth_provider_picker() -> None:
+    app = TauTuiApp(FakeSession())
+
+    async with app.run_test() as pilot:
+        prompt = app.query_one("#prompt")
+        prompt.value = "/login"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert isinstance(app.screen, LoginMethodPickerScreen)
+        await pilot.click("#login-method-subscription")
+        await pilot.pause()
+
+        assert isinstance(app.screen, LoginProviderPickerScreen)
+        provider_list = app.screen.query_one("#login-provider-list", ListView)
+        labels = [str(item.query_one(Label).render()) for item in provider_list.children]
+        assert labels == ["OpenAI Codex subscription\n  openai-codex"]
+        assert "gpt-5.5" not in "\n".join(labels)
+
+
+@pytest.mark.anyio
+async def test_tui_login_api_key_opens_api_provider_picker() -> None:
+    app = TauTuiApp(FakeSession())
+
+    async with app.run_test() as pilot:
+        prompt = app.query_one("#prompt")
+        prompt.value = "/login"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert isinstance(app.screen, LoginMethodPickerScreen)
+        await pilot.click("#login-method-api-key")
+        await pilot.pause()
+
         assert isinstance(app.screen, LoginProviderPickerScreen)
         provider_list = app.screen.query_one("#login-provider-list", ListView)
         labels = [str(item.query_one(Label).render()) for item in provider_list.children]
         assert labels[0] == "OpenAI\n  openai"
-        assert labels[1] == "OpenAI Codex subscription\n  openai-codex"
-        assert "gpt-5.5" not in "\n".join(labels)
+        assert "OpenAI Codex subscription\n  openai-codex" not in labels
 
-        await pilot.press("down")
         await pilot.press("down")
         await pilot.press("enter")
         await pilot.pause()
@@ -1152,9 +1193,7 @@ async def test_tui_prompt_worker_shows_diagnostic_log_path_on_failure(tmp_path: 
 
     await app._run_prompt("break")
 
-    assert app.state.error == (
-        f"Error: EmptyMessageError\nLog: {session.last_diagnostic_log_path}"
-    )
+    assert app.state.error == (f"Error: EmptyMessageError\nLog: {session.last_diagnostic_log_path}")
     assert app.state.items[-1].role == "error"
     assert app.state.items[-1].text == app.state.error
     assert app.state.running is False
