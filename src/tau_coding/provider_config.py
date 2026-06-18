@@ -412,13 +412,15 @@ def _api_key_from_provider(
     *,
     credential_reader: CredentialReader | None,
 ) -> str:
-    api_key = environ.get(provider.api_key_env)
-    if api_key:
-        return api_key
     if provider.credential_name and credential_reader is not None:
         credential = credential_reader.get(provider.credential_name)
         if credential:
             return credential
+        raise RuntimeError(f"Missing provider API key. Run /login {provider.name}.")
+
+    api_key = environ.get(provider.api_key_env)
+    if api_key:
+        return api_key
     credential_hint = f" or run /login {provider.name}" if provider.credential_name else ""
     raise RuntimeError(
         f"Missing provider API key. Set {provider.api_key_env}{credential_hint}."

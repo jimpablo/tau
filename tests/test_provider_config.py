@@ -145,11 +145,18 @@ def test_openai_compatible_config_from_provider_uses_configured_env_var(
 def test_openai_compatible_config_from_provider_preserves_openai_base_url_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://proxy.example/v1/")
 
-    config = openai_compatible_config_from_provider(OpenAICompatibleProviderConfig(name="openai"))
+    class FakeCredentials:
+        def get(self, name: str) -> str | None:
+            return "stored-key" if name == "openai" else None
 
+    config = openai_compatible_config_from_provider(
+        OpenAICompatibleProviderConfig(name="openai", credential_name="openai"),
+        credential_reader=FakeCredentials(),
+    )
+
+    assert config.api_key == "stored-key"
     assert config.base_url == "https://proxy.example/v1"
 
 
@@ -196,7 +203,7 @@ def test_openai_compatible_config_from_provider_uses_configured_headers(
 def test_openai_compatible_config_from_provider_uses_stored_credential(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "env-key")
     provider = OpenAICompatibleProviderConfig(
         name="openrouter",
         base_url="https://openrouter.ai/api/v1",
@@ -216,6 +223,27 @@ def test_openai_compatible_config_from_provider_uses_stored_credential(
     )
 
     assert config.api_key == "stored-key"
+
+
+def test_openai_compatible_config_from_provider_requires_stored_credential(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "env-key")
+    provider = OpenAICompatibleProviderConfig(
+        name="openrouter",
+        base_url="https://openrouter.ai/api/v1",
+        api_key_env="OPENROUTER_API_KEY",
+        credential_name="openrouter",
+        models=("openai/gpt-4.1-mini",),
+        default_model="openai/gpt-4.1-mini",
+    )
+
+    class FakeCredentials:
+        def get(self, name: str) -> str | None:
+            return None
+
+    with pytest.raises(RuntimeError, match="Run /login openrouter"):
+        openai_compatible_config_from_provider(provider, credential_reader=FakeCredentials())
 
 
 def test_anthropic_config_from_provider_uses_stored_credential(

@@ -62,8 +62,10 @@ Example:
 }
 ```
 
-API keys are not written to this file. Each provider entry names the environment
-variable that should contain its API key. `timeout_seconds` is optional and
+API keys are not written to this file. Built-in providers added through
+`/login` read their key from `~/.tau/credentials.json` using `credential_name`.
+Providers without a `credential_name`, such as custom local providers, read the
+environment variable named by `api_key_env`. `timeout_seconds` is optional and
 defaults to `60`; when present, it must be greater than zero. `max_retries`
 defaults to `0`, and `max_retry_delay_seconds` defaults to `1`; both must be
 zero or greater. `headers` is optional and must be an object with string keys

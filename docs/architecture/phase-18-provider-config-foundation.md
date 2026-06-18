@@ -40,8 +40,9 @@ timeout env var: OPENAI_TIMEOUT_SECONDS
 retry env vars: OPENAI_MAX_RETRIES, OPENAI_MAX_RETRY_DELAY_SECONDS
 ```
 
-API keys are not stored in the config file. Provider entries name the
-environment variable that should hold the key.
+API keys are not stored in the config file. Built-in providers use
+`credential_name` to read keys from `~/.tau/credentials.json`; custom providers
+without a credential name read the environment variable named by `api_key_env`.
 
 ## Example config
 
@@ -101,8 +102,8 @@ tau --provider local \
 The setup options are top-level options before the `setup` command word. This
 preserves the Pi-style `tau "prompt"` form for starting the TUI with an initial
 prompt while still adding a lightweight setup flow. Setup writes provider
-metadata only; it warns if the named API key environment variable is not
-currently set.
+metadata only; for custom providers it warns if the named API key environment
+variable is not currently set.
 
 Provider HTTP timeouts are configurable through `timeout_seconds` in
 `~/.tau/providers.json`. The default OpenAI-compatible provider can also read
@@ -138,14 +139,15 @@ built-in provider.
 Provider settings belong to `tau_coding`, not `tau_agent`.
 
 The reusable harness still receives only a ready `ModelProvider` and a model
-name. It does not know about Tau home, JSON config files, environment variables,
-or CLI/TUI setup behavior.
+name. It does not know about Tau home, JSON config files, credentials,
+environment variables, or CLI/TUI setup behavior.
 
 ## Limitations
 
-Phase 18 intentionally keeps setup minimal. Provider metadata is edited through
-the CLI setup command, not an interactive TUI form, and API keys are read from
-environment variables instead of a secure keyring.
+Phase 18 intentionally kept setup minimal. Provider metadata was edited through
+the CLI setup command, not an interactive TUI form. Later login work added
+`~/.tau/credentials.json` for built-in provider API keys; custom providers still
+use environment variables until Tau has a custom-provider credential form.
 
 ## Tests
 
@@ -165,7 +167,7 @@ The tests verify:
 - provider setup and listing CLI behavior
 - provider HTTP timeout and retry parsing plus runtime config forwarding
 - default provider/model selection
-- configured API key environment variables
+- configured API key environment variables and stored credentials
 - CLI provider/model forwarding
 - TUI startup selection
 - `/login` and `/model` command behavior

@@ -23,9 +23,10 @@ uv run tau --version
 ## First Run
 
 ```bash
-export OPENAI_API_KEY="..."
 tau
 ```
+
+Inside the TUI, run `/login` to save a provider API key.
 
 Run one prompt without opening the TUI:
 
@@ -38,7 +39,6 @@ tau "explain this repo"
 ```bash
 uv sync --dev --group docs
 uv run tau --version
-OPENAI_API_KEY=... uv run tau "explain this repo"
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .

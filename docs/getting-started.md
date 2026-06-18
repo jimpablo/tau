@@ -53,8 +53,9 @@ Hugging Face Inference Providers. In the TUI, run `/login` to see the list and
 
 Provider metadata is written to `~/.tau/providers.json`. API keys saved with
 `/login` are written to `~/.tau/credentials.json` with private file permissions.
-Environment variables such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
-`OPENROUTER_API_KEY`, and `HF_TOKEN` still work and take precedence.
+For built-in providers added with `/login`, Tau uses the key saved in
+`credentials.json`. The `api_key_env` field in `providers.json` is metadata for
+custom/env-based providers and does not override a saved Tau login.
 
 To add a custom OpenAI-compatible provider:
 
