@@ -45,6 +45,7 @@ from tau_coding.tui.app import (
 from tau_coding.tui.config import HIGH_CONTRAST_THEME, TuiKeybindings, TuiSettings
 from tau_coding.tui.state import ChatItem
 from tau_coding.tui.widgets import (
+    _compact_token_count,
     render_chat_item,
     render_compact_session_info,
     render_session_sidebar,
@@ -75,8 +76,8 @@ class FakeSession:
         self.context_files = (
             ProjectContextFile(path=str(self.cwd / "AGENTS.md"), content="Follow rules."),
         )
-        self.context_token_estimate = 123
-        self.auto_compact_token_threshold = 1000
+        self.context_token_estimate = 12034
+        self.auto_compact_token_threshold = 200000
         self.thinking_level = "medium"
         self.available_thinking_levels = ("off", "minimal", "low", "medium", "high", "xhigh")
         self.state = FakeSessionState()
@@ -167,8 +168,8 @@ def test_session_sidebar_renders_session_metadata() -> None:
     assert "████████" in output
     assert "τ = 2π" in output
     assert "session" in output
-    assert "context" in output
-    assert "12%" in output
+    assert "context" not in output
+    assert "12k" not in output
     assert "provider" in output
     assert "openai" in output
     assert "fake-model" in output
@@ -198,9 +199,16 @@ def test_compact_session_info_renders_sidebar_facts() -> None:
 
     output = console.export_text()
     assert "/workspace/project (--)" in output
-    assert "123/1000 context" in output
+    assert "12k/200k context" in output
     assert "openai:fake-model" in output
     assert "(medium)" in output
+
+
+def test_compact_token_count_uses_thousands_suffix() -> None:
+    assert _compact_token_count(0) == "0k"
+    assert _compact_token_count(499) == "<1k"
+    assert _compact_token_count(12034) == "12k"
+    assert _compact_token_count(12500) == "13k"
 
 
 def test_compact_session_info_wraps_to_available_width() -> None:

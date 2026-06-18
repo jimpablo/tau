@@ -164,7 +164,6 @@ def render_session_sidebar(
     metadata = Table.grid(padding=(0, 1))
     metadata.add_column(style=theme.completion_description, no_wrap=True)
     metadata.add_column(style=theme.prompt_text)
-    metadata.add_row("context", _context_percentage(session))
     metadata.add_row("provider", session.provider_name)
     metadata.add_row("model", session.model)
     metadata.add_row("thinking", _thinking_level(session))
@@ -500,19 +499,22 @@ def _plain_text(text: str, *, body_style: str) -> Text:
     return Text(text, style=body_style, overflow="fold", no_wrap=False)
 
 
-def _context_percentage(session: SessionSummarySource) -> str:
-    threshold = session.auto_compact_token_threshold
-    if threshold is None or threshold <= 0:
-        return "--"
-    percentage = min(round((session.context_token_estimate / threshold) * 100), 999)
-    return f"{percentage}%"
-
-
 def _context_usage(session: SessionSummarySource) -> str:
     threshold = session.auto_compact_token_threshold
     if threshold is None or threshold <= 0:
-        return f"{session.context_token_estimate} context"
-    return f"{session.context_token_estimate}/{threshold} context"
+        return f"{_compact_token_count(session.context_token_estimate)} context"
+    return (
+        f"{_compact_token_count(session.context_token_estimate)}"
+        f"/{_compact_token_count(threshold)} context"
+    )
+
+
+def _compact_token_count(value: int) -> str:
+    if value <= 0:
+        return "0k"
+    if value < 1000:
+        return "<1k"
+    return f"{(value + 500) // 1000}k"
 
 
 def _thinking_level(session: SessionSummarySource) -> str:
