@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from time import monotonic
 
@@ -12,6 +13,17 @@ from tau_coding import (
     create_read_tool_definition,
     create_write_tool,
 )
+
+
+class FakeCancellationToken:
+    def __init__(self) -> None:
+        self.cancelled = False
+
+    def cancel(self) -> None:
+        self.cancelled = True
+
+    def is_cancelled(self) -> bool:
+        return self.cancelled
 
 
 @pytest.mark.anyio
@@ -170,4 +182,23 @@ async def test_bash_tool_timeout_kills_shell_children(tmp_path: Path) -> None:
     assert result.ok is False
     assert result.data is not None
     assert result.data["timed_out"] is True
+    assert duration < 0.5
+
+
+@pytest.mark.anyio
+async def test_bash_tool_cancellation_kills_shell_children(tmp_path: Path) -> None:
+    tool = create_bash_tool(cwd=tmp_path)
+    token = FakeCancellationToken()
+
+    task = asyncio.create_task(tool.execute({"command": "sleep 1 & wait"}, signal=token))
+    await asyncio.sleep(0.05)
+    token.cancel()
+    start = monotonic()
+    result = await task
+    duration = monotonic() - start
+
+    assert result.ok is False
+    assert result.data is not None
+    assert result.data["cancelled"] is True
+    assert "cancelled" in result.content
     assert duration < 0.5

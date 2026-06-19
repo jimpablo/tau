@@ -10,6 +10,7 @@ from tau_agent import (
     ErrorEvent,
     QueueUpdateEvent,
     RetryEvent,
+    SimpleCancellationToken,
     ThinkingDeltaEvent,
     ToolCall,
     ToolExecutionEndEvent,
@@ -19,6 +20,7 @@ from tau_agent import (
 from tau_agent.loop import run_agent_loop
 from tau_agent.types import JSONValue
 from tau_ai import (
+    CancellationToken,
     FakeProvider,
     ProviderErrorEvent,
     ProviderResponseEndEvent,
@@ -189,6 +191,56 @@ async def test_agent_loop_executes_tools_and_continues_until_no_tool_calls() -> 
     ]
     assert len(provider.calls) == 2
     assert provider.calls[1][2] == messages[:3]
+
+
+@pytest.mark.anyio
+async def test_agent_loop_passes_cancellation_signal_to_tools() -> None:
+    observed: list[CancellationToken | None] = []
+
+    async def executor(
+        arguments: Mapping[str, JSONValue],
+        signal: CancellationToken | None = None,
+    ) -> AgentToolResult:
+        del arguments
+        observed.append(signal)
+        return AgentToolResult(tool_call_id="call-1", name="read", ok=True, content="ok")
+
+    tool = AgentTool(
+        name="read",
+        description="Read a file.",
+        input_schema={"type": "object"},
+        executor=executor,
+    )
+    tool_call = ToolCall(id="call-1", name="read", arguments={"path": "README.md"})
+    first_assistant = AssistantMessage(content="I'll read it.", tool_calls=[tool_call])
+    final_assistant = AssistantMessage(content="Done.")
+    provider = FakeProvider(
+        [
+            [
+                ProviderResponseStartEvent(model="fake"),
+                ProviderResponseEndEvent(message=first_assistant),
+            ],
+            [
+                ProviderResponseStartEvent(model="fake"),
+                ProviderResponseEndEvent(message=final_assistant),
+            ],
+        ]
+    )
+    signal = SimpleCancellationToken()
+
+    await _collect(
+        run_agent_loop(
+            provider=provider,
+            model="fake",
+            system="You are Tau.",
+            messages=[UserMessage(content="Read README.md")],
+            tools=[tool],
+            signal=signal,
+        )
+    )
+
+    assert observed
+    assert observed[0] is signal
 
 
 @pytest.mark.anyio

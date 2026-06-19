@@ -19,7 +19,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from time import monotonic
 
-from tau_agent.tools import AgentTool, AgentToolResult
+from tau_agent.tools import AgentTool, AgentToolResult, ToolCancellationToken
 from tau_agent.types import JSONValue
 
 DEFAULT_MAX_OUTPUT_BYTES = 50 * 1024
@@ -429,11 +429,16 @@ def create_bash_tool_definition(*, cwd: str | Path | None = None) -> ToolDefinit
     """
     root = Path.cwd() if cwd is None else Path(cwd)
 
-    async def execute(arguments: Mapping[str, JSONValue]) -> AgentToolResult:
+    async def execute(
+        arguments: Mapping[str, JSONValue],
+        signal: ToolCancellationToken | None = None,
+    ) -> AgentToolResult:
         command = _str_arg(arguments, "command")
         timeout = _optional_float_arg(arguments, "timeout")
         if timeout is not None and timeout <= 0:
             raise ToolInputError("timeout must be greater than 0")
+        if signal is not None and signal.is_cancelled():
+            raise ToolInputError("Command cancelled")
 
         start = monotonic()
         if os.name == "posix":
@@ -452,12 +457,19 @@ def create_bash_tool_definition(*, cwd: str | Path | None = None) -> ToolDefinit
                 stderr=asyncio.subprocess.STDOUT,
             )
         timed_out = False
+        cancelled = False
+        output_bytes = b""
+        _stderr: bytes | None = None
         try:
-            output_bytes, _stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+            output_bytes, _stderr = await _communicate_with_cancellation(
+                process,
+                timeout=timeout,
+                signal=signal,
+            )
         except TimeoutError:
             timed_out = True
-            _kill_process_tree(process)
-            output_bytes, _stderr = await process.communicate()
+        except asyncio.CancelledError:
+            cancelled = True
 
         output = output_bytes.decode(errors="replace")
         truncation = truncate_tail(output)
@@ -490,12 +502,14 @@ def create_bash_tool_definition(*, cwd: str | Path | None = None) -> ToolDefinit
             status = (
                 f"Command timed out after {timeout:g} seconds" if timeout else "Command timed out"
             )
+        elif cancelled:
+            status = "Command cancelled"
         elif exit_code not in (0, None):
             status = f"Command exited with code {exit_code}"
         if status:
             output_text = append_status_block(output_text, status)
 
-        ok = exit_code == 0 and not timed_out
+        ok = exit_code == 0 and not timed_out and not cancelled
         return AgentToolResult(
             tool_call_id="",
             name="bash",
@@ -506,6 +520,7 @@ def create_bash_tool_definition(*, cwd: str | Path | None = None) -> ToolDefinit
                 "command": command,
                 "exit_code": exit_code,
                 "timed_out": timed_out,
+                "cancelled": cancelled,
                 "duration_seconds": round(monotonic() - start, 3),
                 "truncation": truncation.to_json(),
                 "full_output_path": full_output_path,
@@ -553,6 +568,45 @@ def format_size(bytes_count: int) -> str:
 def append_status_block(text: str, status: str) -> str:
     """Append command status text after a blank line when output already exists."""
     return f"{text}\n\n{status}" if text else status
+
+
+async def _communicate_with_cancellation(
+    process: asyncio.subprocess.Process,
+    *,
+    timeout: float | None,
+    signal: ToolCancellationToken | None,
+) -> tuple[bytes, bytes | None]:
+    communicate = asyncio.create_task(process.communicate())
+    try:
+        if signal is None:
+            return await asyncio.wait_for(communicate, timeout=timeout)
+
+        cancel_watch = asyncio.create_task(_wait_for_cancel(signal))
+        try:
+            done, _pending = await asyncio.wait(
+                {communicate, cancel_watch},
+                timeout=timeout,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if communicate in done:
+                return communicate.result()
+            if cancel_watch in done:
+                _kill_process_tree(process)
+                await process.wait()
+                raise asyncio.CancelledError
+            _kill_process_tree(process)
+            await process.wait()
+            raise TimeoutError
+        finally:
+            cancel_watch.cancel()
+    finally:
+        if not communicate.done():
+            communicate.cancel()
+
+
+async def _wait_for_cancel(signal: ToolCancellationToken) -> None:
+    while not signal.is_cancelled():
+        await asyncio.sleep(0.05)
 
 
 def truncate_head(
