@@ -2156,8 +2156,6 @@ class TauTuiApp(App[None]):
         except Exception as exc:  # noqa: BLE001 - surface session state failures in the TUI
             self._notify(f"Could not switch scoped model: {exc}", severity="error")
             return
-        if isinstance(result, ModelChoice):
-            self._notify(f"Current model: {result.provider_name}:{result.model}")
         self._refresh()
 
     def _notify(

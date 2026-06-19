@@ -2297,6 +2297,13 @@ async def test_tui_app_cycles_scoped_model_from_keybinding() -> None:
         ModelChoice(provider_name="openai", model="other-model"),
     )
     app = TauTuiApp(session)
+    notifications: list[str] = []
+
+    def fake_notify(message: str, **kwargs: object) -> None:
+        del kwargs
+        notifications.append(message)
+
+    app._notify = fake_notify  # type: ignore[method-assign]
 
     async with app.run_test() as pilot:
         await pilot.press("ctrl+p")
@@ -2304,6 +2311,7 @@ async def test_tui_app_cycles_scoped_model_from_keybinding() -> None:
 
     assert session.provider_name == "openai"
     assert session.model == "other-model"
+    assert notifications == []
 
 
 @pytest.mark.anyio
