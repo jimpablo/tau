@@ -587,10 +587,10 @@ class ThemePickerScreen(ModalScreen[TuiThemeName | None]):
     """Theme picker for the built-in TUI themes."""
 
     BINDINGS: ClassVar[list[BindingEntry]] = [
-        Binding("escape", "cancel", "Cancel"),
-        Binding("up", "cursor_up", "Up", show=False),
-        Binding("down", "cursor_down", "Down", show=False),
-        Binding("enter", "select_cursor", "Select", show=False),
+        Binding("escape", "cancel", "Cancel", priority=True),
+        Binding("up", "cursor_up", "Up", show=False, priority=True),
+        Binding("down", "cursor_down", "Down", show=False, priority=True),
+        Binding("enter", "select_cursor", "Select", show=False, priority=True),
     ]
 
     def __init__(self, *, current_theme: TuiThemeName, theme: TuiTheme) -> None:
@@ -1138,7 +1138,14 @@ class TauTuiApp(App[None]):
         height: auto;
         max-height: 12;
         background: $tau-transcript-background;
+        color: $tau-screen-text;
         border: tall $tau-border;
+    }
+
+    #login-provider-list ListItem Label,
+    #theme-picker-list ListItem Label,
+    #model-picker-list ListItem Label {
+        color: $tau-screen-text;
     }
 
     #login-method-intro,
@@ -1488,7 +1495,7 @@ class TauTuiApp(App[None]):
         """Select the previous prompt completion or move up in the prompt."""
         if isinstance(
             self.screen,
-            SessionPickerScreen | LoginProviderPickerScreen | ModelPickerScreen,
+            SessionPickerScreen | LoginProviderPickerScreen | ThemePickerScreen | ModelPickerScreen,
         ):
             self.screen.action_cursor_up()
             return
