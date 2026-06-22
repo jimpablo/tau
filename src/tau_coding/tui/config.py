@@ -205,10 +205,12 @@ class TuiSettings:
 
     keybindings: TuiKeybindings = field(default_factory=TuiKeybindings)
     theme: TuiThemeName = "tau-dark"
+    auto_copy_selection: bool = False
 
     def to_json(self) -> dict[str, Any]:
         """Serialize these settings to JSON-compatible data."""
         return {
+            "auto_copy_selection": self.auto_copy_selection,
             "keybindings": self.keybindings.to_json(),
             "theme": self.theme,
         }
@@ -245,7 +247,7 @@ def save_tui_settings(settings: TuiSettings, paths: TauPaths | None = None) -> P
 
 def tui_settings_from_json(data: dict[str, Any]) -> TuiSettings:
     """Parse TUI settings from JSON-compatible data."""
-    allowed_fields = {"keybindings", "theme"}
+    allowed_fields = {"auto_copy_selection", "keybindings", "theme"}
     unknown_fields = set(data) - allowed_fields
     if unknown_fields:
         raise TuiConfigError(f"Unknown TUI settings field: {sorted(unknown_fields)[0]}")
@@ -256,7 +258,17 @@ def tui_settings_from_json(data: dict[str, Any]) -> TuiSettings:
     return TuiSettings(
         keybindings=_keybindings_from_json(keybindings_data),
         theme=_theme_name(data.get("theme", "tau-dark")),
+        auto_copy_selection=_bool_setting(
+            data.get("auto_copy_selection", False),
+            "auto_copy_selection",
+        ),
     )
+
+
+def _bool_setting(value: object, field_name: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    raise TuiConfigError(f"TUI setting must be a boolean: {field_name}")
 
 
 def _keybindings_from_json(data: dict[str, Any]) -> TuiKeybindings:
