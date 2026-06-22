@@ -376,7 +376,7 @@ def _render_chat_body(
     )
     if patch_body is not None:
         return patch_body
-    if role == "assistant":
+    if role in {"assistant", "thinking"}:
         if _has_unclosed_fence(text):
             return _plain_text(text, body_style=body_style)
         return ThemedMarkdown(

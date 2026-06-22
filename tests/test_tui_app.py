@@ -510,12 +510,15 @@ def test_tool_chat_items_hide_and_show_result_text() -> None:
     assert "full file contents" in expanded
 
 
-def test_thinking_chat_items_use_distinct_style() -> None:
+def test_thinking_chat_items_use_distinct_style_and_markdown() -> None:
     console = Console(record=True, width=80)
 
-    console.print(render_chat_item(ChatItem(role="thinking", text="Hidden reasoning")))
+    console.print(render_chat_item(ChatItem(role="thinking", text="**Plan**\n\nHidden reasoning")))
 
     output = console.export_text(styles=True)
+    plain = console.export_text()
+    assert "Plan" in output
+    assert "**Plan**" not in plain
     assert "Hidden reasoning" in output
     assert "38;2;156;163;175" in output
 
