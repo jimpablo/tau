@@ -347,8 +347,10 @@ compaction prompt. Optional instructions after `/compact` are added as extra
 focus for that prompt.
 
 Tau can also compact automatically before a new TUI turn, after a model
-response, or after a context-overflow error when the estimated context exceeds
-an opt-in threshold:
+response, or after a context-overflow error. By default it uses Pi's threshold:
+`model context window - 16384` reserve tokens. Built-in models use configured
+context windows; unknown/custom models fall back to a `128000` token window.
+You can override the threshold for a run:
 
 ```bash
 tau --auto-compact-threshold 100000

@@ -13,7 +13,9 @@ from tau_coding.context import (
 from tau_coding.context_window import (
     DEFAULT_COMPACTION_KEEP_RECENT_TOKENS,
     DEFAULT_COMPACTION_RESERVE_TOKENS,
+    DEFAULT_CONTEXT_WINDOW_TOKENS,
     SUMMARIZATION_SYSTEM_PROMPT,
+    auto_compaction_threshold_for_context_window,
     build_compaction_summary_prompt,
     estimate_context_tokens,
     estimate_message_tokens,
@@ -203,6 +205,8 @@ __all__ = [
     "discover_project_context_with_diagnostics",
     "DEFAULT_COMPACTION_KEEP_RECENT_TOKENS",
     "DEFAULT_COMPACTION_RESERVE_TOKENS",
+    "DEFAULT_CONTEXT_WINDOW_TOKENS",
+    "auto_compaction_threshold_for_context_window",
     "estimate_context_tokens",
     "estimate_message_tokens",
     "estimate_text_tokens",

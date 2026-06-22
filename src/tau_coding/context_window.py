@@ -9,6 +9,7 @@ CHARS_PER_TOKEN = 4
 MESSAGE_OVERHEAD_TOKENS = 4
 TOOL_OVERHEAD_TOKENS = 16
 SUMMARY_MESSAGE_CHAR_LIMIT = 500
+DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000
 DEFAULT_COMPACTION_RESERVE_TOKENS = 16_384
 DEFAULT_COMPACTION_KEEP_RECENT_TOKENS = 20_000
 COMPACTION_SUMMARY_PREFIX = "Previous conversation summary:\n"
@@ -154,6 +155,13 @@ def estimate_context_tokens(
 ) -> int:
     """Return a rough estimate of the active provider context size."""
     return estimate_context_usage(system=system, messages=messages, tools=tools).total_tokens
+
+
+def auto_compaction_threshold_for_context_window(context_window_tokens: int) -> int | None:
+    """Return Pi-style automatic compaction threshold for a model context window."""
+    if context_window_tokens <= 0:
+        return None
+    return max(1, context_window_tokens - DEFAULT_COMPACTION_RESERVE_TOKENS)
 
 
 def estimate_context_usage(

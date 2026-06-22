@@ -47,19 +47,29 @@ Tau checks automatic compaction in three places:
 - after a successful prompt or continuation, to compact before the next user turn
 - after a context-overflow provider error, to compact and retry once
 
-Automatic threshold compaction is enabled only when
-`--auto-compact-threshold <tokens>` is set. Tau should eventually use
-`model context window - reserve tokens` by default, matching Pi, but the current
-provider configuration does not store trustworthy per-model context windows. For
-now, unknown/local models stay explicit instead of guessing.
+Automatic threshold compaction is enabled by default. Like Pi, Tau triggers it
+when estimated context is greater than:
 
-The Pi defaults that Tau follows where possible are:
+```text
+model context window - reserve tokens
+```
+
+The Pi defaults that Tau follows are:
 
 - reserve tokens: `16384`
 - recent context to keep: `20000`
+- fallback context window for unknown/custom models: `128000`
 
-The reserve is documented now for parity, but Tau's provider interface does not
-yet expose a per-request max-output-token setting for the summarization call.
+Built-in providers include per-model context windows where Tau knows them.
+Unknown/local models use the fallback window, so their default threshold is
+`111616` tokens. You can override the threshold for a run:
+
+```bash
+tau --auto-compact-threshold 100000
+```
+
+Tau's provider interface does not yet expose a per-request max-output-token
+setting for the summarization call.
 
 ## What Gets Summarized
 
@@ -193,8 +203,8 @@ fails, Tau surfaces that error and stops instead of looping.
 ## Known Limitations
 
 - Tau estimates tokens with `chars / 4`; it does not yet store provider usage.
-- Tau does not yet have provider-configured model context windows, so automatic
-  threshold compaction still requires `--auto-compact-threshold`.
+- Tau has provider-configured context windows for built-in models and falls back
+  to `128000` tokens for unknown/custom models.
 - The provider interface does not yet expose max output tokens for the
   summarization request.
 - Split-turn prefix summarization is documented and the prompt is available, but

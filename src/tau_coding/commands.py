@@ -54,6 +54,9 @@ class CommandSession(Protocol):
     def auto_compact_token_threshold(self) -> int | None: ...
 
     @property
+    def context_window_tokens(self) -> int: ...
+
+    @property
     def thinking_level(self) -> str: ...
 
     @property
@@ -351,6 +354,7 @@ def _status_command(context: CommandContext) -> CommandResult:
         f"Prompt templates: {len(session.prompt_templates)}",
         f"Context files: {len(session.context_files)}",
         f"Estimated context tokens: {session.context_token_estimate}",
+        f"Context window: {session.context_window_tokens}",
         f"Thinking mode: {session.thinking_level}",
         f"Resource diagnostics: {len(session.resource_diagnostics)}",
     ]

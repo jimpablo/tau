@@ -66,13 +66,21 @@ Estimated context tokens: <count>
 This gives automatic compaction thresholds a stable application-layer primitive
 without adding tokenizer policy to `tau_agent`.
 
-Tau supports an opt-in TUI threshold:
+Tau enables Pi-style automatic compaction by default using:
+
+```text
+model context window - 16384 reserve tokens
+```
+
+Built-in models carry configured context-window metadata, and unknown/custom
+models fall back to a `128000` token window. You can override the threshold for a
+run with:
 
 ```bash
 tau --auto-compact-threshold 100000
 ```
 
-When the active context estimate exceeds this threshold before a new prompt or
+When the active context estimate exceeds the effective threshold before a new prompt or
 after a model response, Tau asks the active provider for a structured summary,
 appends a `CompactionEntry`, and rebuilds the in-memory transcript. Tau also
 attempts one compact-and-retry cycle after provider errors that look like

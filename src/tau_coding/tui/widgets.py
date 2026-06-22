@@ -62,6 +62,9 @@ class SessionSummarySource(Protocol):
     def auto_compact_token_threshold(self) -> int | None: ...
 
     @property
+    def context_window_tokens(self) -> int: ...
+
+    @property
     def thinking_level(self) -> str: ...
 
 
@@ -130,7 +133,7 @@ class TranscriptView(RichLog):
         theme = self._render_theme
         self._last_render_width = self.scrollable_content_region.width
         self.clear()
-        for index, item in enumerate(state.items):
+        for _index, item in enumerate(state.items):
             if item.role == "thinking" and not state.show_thinking:
                 continue
             self.write(
@@ -538,7 +541,10 @@ def _plain_text(text: str, *, body_style: str) -> Text:
 def _context_usage(session: SessionSummarySource) -> str:
     threshold = session.auto_compact_token_threshold
     if threshold is None or threshold <= 0:
-        return f"{_compact_token_count(session.context_token_estimate)} context"
+        return (
+            f"{_compact_token_count(session.context_token_estimate)}"
+            f"/{_compact_token_count(session.context_window_tokens)} context"
+        )
     return (
         f"{_compact_token_count(session.context_token_estimate)}"
         f"/{_compact_token_count(threshold)} context"

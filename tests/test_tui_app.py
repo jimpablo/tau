@@ -93,6 +93,7 @@ class FakeSession:
         )
         self.context_token_estimate = 12034
         self.auto_compact_token_threshold = 200000
+        self.context_window_tokens = 216384
         self.thinking_level = "medium"
         self.available_thinking_levels = ("off", "minimal", "low", "medium", "high", "xhigh")
         self.state = FakeSessionState()

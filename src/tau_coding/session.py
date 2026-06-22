@@ -35,8 +35,10 @@ from tau_coding.commands import CommandRegistry, CommandResult, create_default_c
 from tau_coding.context import discover_project_context_with_diagnostics
 from tau_coding.context_window import (
     DEFAULT_COMPACTION_KEEP_RECENT_TOKENS,
+    DEFAULT_CONTEXT_WINDOW_TOKENS,
     SUMMARIZATION_SYSTEM_PROMPT,
     ContextUsageEstimate,
+    auto_compaction_threshold_for_context_window,
     build_compaction_summary_prompt,
     estimate_context_usage,
     estimate_message_tokens,
@@ -171,6 +173,7 @@ class CodingSessionConfig:
     provider_settings: ProviderSettings | None = None
     runtime_provider_config: ProviderConfig | None = None
     auto_compact_token_threshold: int | None = None
+    auto_compact_enabled: bool = True
     thinking_level: ThinkingLevel = DEFAULT_THINKING_LEVEL
 
 
@@ -209,6 +212,7 @@ class CodingSession:
         self._runtime_provider_config = config.runtime_provider_config
         self._resource_paths = resource_paths_with_cwd(config.resource_paths, config.cwd)
         self._auto_compact_token_threshold = config.auto_compact_token_threshold
+        self._auto_compact_enabled = config.auto_compact_enabled
         self._thinking_level = _state_thinking_level(state, config.thinking_level)
         self._owned_providers: list[ClosableModelProvider] = []
         self._diagnostic_logger = AgentCallDiagnosticLogger.from_paths(self._resource_paths.paths)
@@ -490,8 +494,20 @@ class CodingSession:
 
     @property
     def auto_compact_token_threshold(self) -> int | None:
-        """Return the configured automatic compaction threshold, if any."""
-        return self._auto_compact_token_threshold
+        """Return the effective automatic compaction threshold, if any."""
+        if not self._auto_compact_enabled:
+            return None
+        if self._auto_compact_token_threshold is not None:
+            return self._auto_compact_token_threshold
+        return auto_compaction_threshold_for_context_window(self.context_window_tokens)
+
+    @property
+    def context_window_tokens(self) -> int:
+        """Return the active model's configured context window, or Tau's fallback."""
+        provider = self._active_provider_config()
+        if provider is None:
+            return DEFAULT_CONTEXT_WINDOW_TOKENS
+        return provider.context_windows.get(self.model, DEFAULT_CONTEXT_WINDOW_TOKENS)
 
     @property
     def command_registry(self) -> CommandRegistry:
@@ -772,6 +788,7 @@ class CodingSession:
                 provider_settings=self._provider_settings,
                 runtime_provider_config=self._runtime_provider_config,
                 auto_compact_token_threshold=self._auto_compact_token_threshold,
+                auto_compact_enabled=self._auto_compact_enabled,
                 thinking_level=self._thinking_level,
             )
         )
@@ -789,6 +806,7 @@ class CodingSession:
         self._runtime_provider_config = replacement._runtime_provider_config
         self._resource_paths = replacement._resource_paths
         self._auto_compact_token_threshold = replacement._auto_compact_token_threshold
+        self._auto_compact_enabled = replacement._auto_compact_enabled
         self._thinking_level = replacement._thinking_level
         return f"Resumed session: {record.id}"
 
@@ -827,6 +845,7 @@ class CodingSession:
         self._runtime_provider_config = replacement._runtime_provider_config
         self._resource_paths = replacement._resource_paths
         self._auto_compact_token_threshold = replacement._auto_compact_token_threshold
+        self._auto_compact_enabled = replacement._auto_compact_enabled
         self._thinking_level = replacement._thinking_level
         return f"Started new session: {record.id}"
 
@@ -1074,7 +1093,7 @@ class CodingSession:
         )
 
     async def _maybe_auto_compact(self) -> bool:
-        threshold = self._auto_compact_token_threshold
+        threshold = self.auto_compact_token_threshold
         if threshold is None or threshold <= 0:
             return False
         if len(self._state.context_entry_ids) < 2:

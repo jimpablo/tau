@@ -51,6 +51,7 @@ class OpenAICompatibleProviderConfig:
     credential_name: str | None = None
     models: tuple[str, ...] = (DEFAULT_MODEL,)
     default_model: str = DEFAULT_MODEL
+    context_windows: dict[str, int] = field(default_factory=dict)
     headers: dict[str, str] = field(default_factory=dict)
     timeout_seconds: float = DEFAULT_OPENAI_COMPATIBLE_TIMEOUT_SECONDS
     max_retries: int = DEFAULT_OPENAI_COMPATIBLE_MAX_RETRIES
@@ -66,6 +67,7 @@ class OpenAICompatibleProviderConfig:
             max_retries=self.max_retries,
             max_retry_delay_seconds=self.max_retry_delay_seconds,
         )
+        _validate_context_windows(self.context_windows)
         _validate_thinking_config(
             thinking_levels=self.thinking_levels,
             thinking_models=self.thinking_models,
@@ -83,6 +85,7 @@ class OpenAICompatibleProviderConfig:
             "credential_name": self.credential_name,
             "models": list(self.models),
             "default_model": self.default_model,
+            "context_windows": dict(self.context_windows),
             "headers": dict(self.headers),
             "timeout_seconds": self.timeout_seconds,
             "max_retries": self.max_retries,
@@ -106,6 +109,7 @@ class AnthropicProviderConfig:
     credential_name: str | None = "anthropic"
     models: tuple[str, ...] = ("claude-sonnet-4-6",)
     default_model: str = "claude-sonnet-4-6"
+    context_windows: dict[str, int] = field(default_factory=dict)
     headers: dict[str, str] = field(default_factory=dict)
     timeout_seconds: float = DEFAULT_OPENAI_COMPATIBLE_TIMEOUT_SECONDS
     max_retries: int = DEFAULT_OPENAI_COMPATIBLE_MAX_RETRIES
@@ -121,6 +125,7 @@ class AnthropicProviderConfig:
             max_retries=self.max_retries,
             max_retry_delay_seconds=self.max_retry_delay_seconds,
         )
+        _validate_context_windows(self.context_windows)
         _validate_thinking_config(
             thinking_levels=self.thinking_levels,
             thinking_models=self.thinking_models,
@@ -142,6 +147,7 @@ class AnthropicProviderConfig:
             "credential_name": self.credential_name,
             "models": list(self.models),
             "default_model": self.default_model,
+            "context_windows": dict(self.context_windows),
             "headers": dict(self.headers),
             "timeout_seconds": self.timeout_seconds,
             "max_retries": self.max_retries,
@@ -172,6 +178,7 @@ class OpenAICodexProviderConfig:
         "gpt-5.2",
     )
     default_model: str = "gpt-5.5"
+    context_windows: dict[str, int] = field(default_factory=dict)
     headers: dict[str, str] = field(default_factory=dict)
     timeout_seconds: float = DEFAULT_OPENAI_COMPATIBLE_TIMEOUT_SECONDS
     max_retries: int = DEFAULT_OPENAI_COMPATIBLE_MAX_RETRIES
@@ -187,6 +194,7 @@ class OpenAICodexProviderConfig:
             max_retries=self.max_retries,
             max_retry_delay_seconds=self.max_retry_delay_seconds,
         )
+        _validate_context_windows(self.context_windows)
         _validate_thinking_config(
             thinking_levels=self.thinking_levels,
             thinking_models=self.thinking_models,
@@ -208,6 +216,7 @@ class OpenAICodexProviderConfig:
             "credential_name": self.credential_name,
             "models": list(self.models),
             "default_model": self.default_model,
+            "context_windows": dict(self.context_windows),
             "headers": dict(self.headers),
             "timeout_seconds": self.timeout_seconds,
             "max_retries": self.max_retries,
@@ -285,6 +294,7 @@ def provider_config_from_catalog_entry(name: str) -> ProviderConfig:
     for entry in BUILTIN_PROVIDER_CATALOG:
         if entry.name != name:
             continue
+        context_windows = dict(entry.context_windows or {})
         if entry.kind == "anthropic":
             return AnthropicProviderConfig(
                 name=entry.name,
@@ -293,6 +303,7 @@ def provider_config_from_catalog_entry(name: str) -> ProviderConfig:
                 credential_name=entry.credential_name,
                 models=entry.models,
                 default_model=entry.default_model,
+                context_windows=context_windows,
                 thinking_levels=entry.thinking_levels,
                 thinking_models=entry.thinking_models,
                 thinking_default=entry.thinking_default,
@@ -306,6 +317,7 @@ def provider_config_from_catalog_entry(name: str) -> ProviderConfig:
                 credential_name=entry.credential_name,
                 models=entry.models,
                 default_model=entry.default_model,
+                context_windows=context_windows,
                 thinking_levels=entry.thinking_levels,
                 thinking_models=entry.thinking_models,
                 thinking_default=entry.thinking_default,
@@ -318,6 +330,7 @@ def provider_config_from_catalog_entry(name: str) -> ProviderConfig:
             credential_name=entry.credential_name,
             models=entry.models,
             default_model=entry.default_model,
+            context_windows=context_windows,
             thinking_levels=entry.thinking_levels,
             thinking_models=entry.thinking_models,
             thinking_default=entry.thinking_default,
@@ -421,6 +434,7 @@ def _merge_provider_config(existing: ProviderConfig, incoming: ProviderConfig) -
         existing.default_model if existing.default_model in models else incoming.default_model
     )
     headers = {**existing.headers, **incoming.headers}
+    context_windows = {**incoming.context_windows, **existing.context_windows}
     thinking_levels = (
         existing.thinking_levels
         if existing.thinking_levels is not None
@@ -446,6 +460,7 @@ def _merge_provider_config(existing: ProviderConfig, incoming: ProviderConfig) -
         models=models,
         default_model=default_model,
         headers=headers,
+        context_windows=context_windows,
         thinking_levels=thinking_levels,
         thinking_models=thinking_models,
         thinking_default=thinking_default,
@@ -649,6 +664,9 @@ def _provider_from_json(data: object) -> ProviderConfig:
     )
     models = _string_tuple(data.get("models"), f"providers[{name}].models")
     default_model = _string(data.get("default_model"), f"providers[{name}].default_model")
+    context_windows = _context_window_dict(
+        data.get("context_windows", {}), f"providers[{name}].context_windows"
+    )
     headers = _string_dict(data.get("headers", {}), f"providers[{name}].headers")
     timeout_seconds = _positive_float(
         data.get("timeout_seconds", DEFAULT_OPENAI_COMPATIBLE_TIMEOUT_SECONDS),
@@ -687,6 +705,7 @@ def _provider_from_json(data: object) -> ProviderConfig:
             credential_name=credential_name,
             models=models,
             default_model=default_model,
+            context_windows=context_windows,
             headers=headers,
             timeout_seconds=timeout_seconds,
             max_retries=max_retries,
@@ -704,6 +723,7 @@ def _provider_from_json(data: object) -> ProviderConfig:
             credential_name=credential_name,
             models=models,
             default_model=default_model,
+            context_windows=context_windows,
             headers=headers,
             timeout_seconds=timeout_seconds,
             max_retries=max_retries,
@@ -720,6 +740,7 @@ def _provider_from_json(data: object) -> ProviderConfig:
         credential_name=credential_name,
         models=models,
         default_model=default_model,
+        context_windows=context_windows,
         headers=headers,
         timeout_seconds=timeout_seconds,
         max_retries=max_retries,
@@ -764,6 +785,18 @@ def _validate_provider_numbers(
         or max_retry_delay_seconds < 0
     ):
         raise ProviderConfigError("Provider max_retry_delay_seconds must be 0 or greater")
+
+
+def _validate_context_windows(context_windows: dict[str, int]) -> None:
+    for model, context_window in context_windows.items():
+        if not isinstance(model, str) or not model.strip():
+            raise ProviderConfigError("Provider context_windows keys must be non-empty strings")
+        if (
+            not isinstance(context_window, int)
+            or isinstance(context_window, bool)
+            or context_window <= 0
+        ):
+            raise ProviderConfigError("Provider context_windows values must be positive integers")
 
 
 def _validate_thinking_config(
@@ -884,6 +917,21 @@ def _string_dict(value: object, field_name: str) -> dict[str, str]:
         if not isinstance(item, str) or not item.strip():
             raise ProviderConfigError(f"Provider field must be a string object: {field_name}")
         items[key.strip()] = item.strip()
+    return items
+
+
+def _context_window_dict(value: object, field_name: str) -> dict[str, int]:
+    if not isinstance(value, dict):
+        raise ProviderConfigError(f"Provider field must be an integer object: {field_name}")
+    items: dict[str, int] = {}
+    for key, item in value.items():
+        if not isinstance(key, str) or not key.strip():
+            raise ProviderConfigError(f"Provider field must be an integer object: {field_name}")
+        if not isinstance(item, int) or isinstance(item, bool) or item <= 0:
+            raise ProviderConfigError(
+                f"Provider field values must be positive integers: {field_name}"
+            )
+        items[key.strip()] = item
     return items
 
 

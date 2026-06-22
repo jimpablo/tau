@@ -1078,6 +1078,65 @@ async def test_session_auto_compacts_after_response_when_threshold_is_exceeded(
 
 
 @pytest.mark.anyio
+async def test_session_auto_compacts_with_pi_style_default_threshold(
+    tmp_path: Path,
+) -> None:
+    storage = JsonlSessionStorage(tmp_path / "session.jsonl")
+    large_prompt = "Explain sessions.\n" + ("old context " * 12_000)
+    provider = FakeProvider(
+        [
+            [
+                ProviderResponseStartEvent(model="fake"),
+                ProviderResponseEndEvent(message=AssistantMessage(content="First answer")),
+            ],
+            [
+                ProviderResponseStartEvent(model="fake"),
+                ProviderResponseEndEvent(message=AssistantMessage(content="Second answer")),
+            ],
+            [
+                ProviderResponseStartEvent(model="fake"),
+                ProviderResponseEndEvent(
+                    message=AssistantMessage(content="Default threshold summary")
+                ),
+            ],
+        ]
+    )
+    settings = ProviderSettings(
+        default_provider="local",
+        providers=(
+            OpenAICompatibleProviderConfig(
+                name="local",
+                models=("fake",),
+                default_model="fake",
+                context_windows={"fake": 20_000},
+            ),
+        ),
+    )
+    session = await CodingSession.load(
+        CodingSessionConfig(
+            provider=provider,
+            model="fake",
+            system="You are Tau.",
+            storage=storage,
+            cwd=tmp_path,
+            provider_name="local",
+            provider_settings=settings,
+        )
+    )
+
+    assert session.context_window_tokens == 20_000
+    assert session.auto_compact_token_threshold == 3_616
+
+    _first_events = await _collect_session_events(session.prompt(large_prompt))
+    _second_events = await _collect_session_events(session.prompt("Continue."))
+
+    compactions = [entry for entry in await storage.read_all() if entry.type == "compaction"]
+
+    assert len(compactions) == 1
+    assert compactions[0].summary == "Default threshold summary"
+
+
+@pytest.mark.anyio
 async def test_session_compacts_and_retries_once_after_context_overflow(
     tmp_path: Path,
 ) -> None:

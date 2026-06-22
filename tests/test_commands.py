@@ -36,6 +36,7 @@ class FakeSession:
         )
         self.context_token_estimate = 123
         self.auto_compact_token_threshold = 200
+        self.context_window_tokens = 584
         self.thinking_level = "medium"
         self.available_thinking_levels = ("off", "minimal", "low", "medium", "high", "xhigh")
         self.tui_theme = "tau-dark"
@@ -149,6 +150,7 @@ def test_session_command_includes_session_details(tmp_path: Path) -> None:
     assert "Skills: 1" in result.message
     assert "Context files: 1" in result.message
     assert "Estimated context tokens: 123" in result.message
+    assert "Context window: 584" in result.message
     assert "Thinking mode: medium" in result.message
     assert "Auto compact threshold: 200" in result.message
     assert "Resource diagnostics: 0" in result.message
