@@ -79,6 +79,7 @@ from tau_coding.session import (
     parse_terminal_command,
 )
 from tau_coding.session_manager import CodingSessionRecord, SessionManager
+from tau_coding.shell_config import load_shell_settings
 from tau_coding.thinking import DEFAULT_THINKING_LEVEL
 from tau_coding.tui.adapter import TuiEventAdapter
 from tau_coding.tui.autocomplete import (
@@ -775,12 +776,12 @@ class LoginProviderPickerScreen(ModalScreen[str | None]):
         super().__init__()
         self.providers = tuple(providers)
         self.theme = theme
-        self.title = title
+        self.title_text = title
 
     def compose(self) -> ComposeResult:
         """Compose the provider picker."""
         with Vertical(id="login-provider-picker"):
-            yield Static(self.title, id="login-provider-title")
+            yield Static(self.title_text, id="login-provider-title")
             yield ListView(
                 *[
                     ListItem(Label(_login_provider_label(provider), markup=False))
@@ -2014,7 +2015,8 @@ class TauTuiApp(App[None]):
             result = await run_terminal_command(command, add_to_context=add_to_context)
         except Exception as exc:  # noqa: BLE001 - surface command execution failures in the TUI
             if item_index < len(self.state.items):
-                self.state.items[item_index].tool_result_text = format_terminal_command_result_block(
+                item = self.state.items[item_index]
+                item.tool_result_text = format_terminal_command_result_block(
                     ok=False,
                     added_to_context=add_to_context,
                     output=str(exc),
@@ -3567,6 +3569,7 @@ async def run_tui_app(
         raise RuntimeError("--resume and --new-session cannot be used together")
 
     provider_settings = load_provider_settings()
+    shell_settings = load_shell_settings()
     manager = session_manager or SessionManager()
     record = _explicit_resume_record(
         manager,
@@ -3615,6 +3618,7 @@ async def run_tui_app(
                 provider_settings=provider_settings,
                 runtime_provider_config=runtime_provider_config,
                 auto_compact_token_threshold=auto_compact_token_threshold,
+                shell_command_prefix=shell_settings.shell_command_prefix,
             )
         )
         app = TauTuiApp(
