@@ -1,4 +1,5 @@
 import asyncio
+import re
 from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
@@ -58,6 +59,7 @@ from tau_coding.tui.app import (
     TreePickerScreen,
     _activity_prompt_border_color,
     _completion_selected_render_line,
+    _theme_css_variables,
     _terminal_command_prefix_span,
     _visible_completion_state,
 )
@@ -72,6 +74,7 @@ from tau_coding.tui.config import (
 )
 from tau_coding.tui.state import ChatItem
 from tau_coding.tui.widgets import (
+    LeftAlignedMarkdownHeading,
     StreamingTranscriptMessageWidget,
     TranscriptMessageWidget,
     TranscriptView,
@@ -83,6 +86,13 @@ from tau_coding.tui.widgets import (
     render_session_sidebar,
     transcript_item_selection_text,
 )
+
+
+ANSI_PATTERN = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+
+
+def _strip_ansi(text: str) -> str:
+    return ANSI_PATTERN.sub("", text)
 
 
 class FakeSessionState:
@@ -830,16 +840,49 @@ def test_light_theme_tool_error_uses_red_text_without_background() -> None:
     assert "38;2;185;28;28;48;2" not in output
 
 
-def test_dark_theme_markdown_code_uses_accent_highlight() -> None:
+def test_dark_theme_markdown_code_uses_aqua_highlight() -> None:
     console = Console(record=True, width=80)
     console.print(render_chat_item(ChatItem(role="assistant", text="Use `tau` here.")))
 
     output = console.export_text(styles=True)
 
+    assert "38;2;167;243;240" in output
+    assert "38;2;244;162;97" not in output
+
+
+def test_assistant_markdown_titles_use_highlight_color_and_left_alignment() -> None:
+    console = Console(record=True, width=60, color_system="truecolor")
+    console.print(render_chat_item(ChatItem(role="assistant", text="# Title\n\n## Header")))
+
+    output = console.export_text(styles=True)
+    plain_output = _strip_ansi(output)
+
     assert "38;2;244;162;97" in output
+    assert "Title" in plain_output
+    assert not plain_output.splitlines()[1].startswith(" " * 20)
+    assert LeftAlignedMarkdownHeading.LEVEL_ALIGN["h1"] == "left"
 
 
-def test_light_theme_markdown_code_uses_highlight_text_without_background() -> None:
+def test_markdown_tables_use_highlight_color_for_headers() -> None:
+    console = Console(record=True, width=80, color_system="truecolor")
+    console.print(
+        render_chat_item(ChatItem(role="assistant", text="| Name | Value |\n| --- | --- |\n| A | B |"))
+    )
+
+    output = console.export_text(styles=True)
+
+    assert "38;2;244;162;97" in output
+    assert "\x1b[36" not in output
+
+
+def test_textual_markdown_uses_theme_highlight_and_aqua_inline_code() -> None:
+    variables = _theme_css_variables(TAU_LIGHT_THEME)
+
+    assert variables["tau-markdown-highlight"] == TAU_LIGHT_THEME.highlight_text
+    assert variables["tau-markdown-inline-code"] == "#0891b2"
+
+
+def test_light_theme_markdown_code_uses_aqua_without_background() -> None:
     console = Console(record=True, width=80)
     console.print(
         render_chat_item(
@@ -850,8 +893,8 @@ def test_light_theme_markdown_code_uses_highlight_text_without_background() -> N
 
     output = console.export_text(styles=True)
 
-    assert "38;2;29;78;216" in output
-    assert "38;2;29;78;216;48;2" not in output
+    assert "38;2;8;145;178" in output
+    assert "38;2;8;145;178;48;2" not in output
 
 
 def test_tool_chat_items_color_status_metadata_not_tool_name_or_results() -> None:
@@ -2396,6 +2439,23 @@ async def test_tui_app_notifications_render_literal_markup_text() -> None:
 
     assert notification.message == "Error: value [type=extra_forbidden]"
     assert notification.markup is False
+
+
+@pytest.mark.anyio
+async def test_tui_app_clicking_transcript_refocuses_prompt() -> None:
+    app = TauTuiApp(FakeSession())
+
+    async with app.run_test() as pilot:
+        prompt = app.query_one("#prompt", PromptInput)
+        transcript = app.query_one("#transcript", TranscriptView)
+        transcript.focus()
+        await pilot.pause()
+        assert app.screen.focused is transcript
+
+        await pilot.click("#transcript")
+        await pilot.pause()
+
+        assert app.screen.focused is prompt
 
 
 @pytest.mark.anyio

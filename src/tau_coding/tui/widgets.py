@@ -4,13 +4,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from subprocess import TimeoutExpired, run
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 
 from pygments.lexers import get_lexer_by_name  # type: ignore[import-untyped]
 from pygments.util import ClassNotFound  # type: ignore[import-untyped]
 from rich.align import Align
 from rich.console import Console, Group, RenderableType
-from rich.markdown import Markdown
+from rich.markdown import Heading, Markdown
 from rich.padding import Padding
 from rich.rule import Rule
 from rich.style import Style
@@ -115,6 +115,29 @@ class NonSelectableStatic(Static):
 
 class ThemedMarkdownWidget(TextualMarkdown):
     """Textual Markdown widget reserved for Tau transcript streaming."""
+
+    DEFAULT_CSS = """
+    ThemedMarkdownWidget MarkdownH1,
+    ThemedMarkdownWidget MarkdownH2,
+    ThemedMarkdownWidget MarkdownH3,
+    ThemedMarkdownWidget MarkdownH4,
+    ThemedMarkdownWidget MarkdownH5,
+    ThemedMarkdownWidget MarkdownH6 {
+        color: $tau-markdown-highlight;
+        content-align: left middle;
+        text-style: bold;
+    }
+
+    ThemedMarkdownWidget MarkdownBlock > .code_inline {
+        color: $tau-markdown-inline-code !important;
+        background: transparent !important;
+    }
+
+    ThemedMarkdownWidget MarkdownTableContent > .header {
+        color: $tau-markdown-highlight;
+        text-style: bold;
+    }
+    """
 
     def __init__(
         self,
@@ -885,8 +908,8 @@ def _render_chat_body(
             style=body_style,
             code_theme=syntax_theme,
             inline_code_theme=syntax_theme,
-            heading_style=theme.accent,
-            highlight_style=_markdown_highlight_style(theme),
+            heading_style=_markdown_highlight_style(theme),
+            inline_code_style=_markdown_inline_code_style(theme),
         )
     fenced_body = _render_fenced_body(
         text,
@@ -924,15 +947,30 @@ def _render_patch_body(
     )
 
 
+class LeftAlignedMarkdownHeading(Heading):
+    """Rich Markdown heading that keeps all heading levels left-aligned."""
+
+    LEVEL_ALIGN: ClassVar[dict[str, str]] = {
+        "h1": "left",
+        "h2": "left",
+        "h3": "left",
+        "h4": "left",
+        "h5": "left",
+        "h6": "left",
+    }
+
+
 class ThemedMarkdown(Markdown):
     """Markdown renderer with Tau's softer heading/accent colors."""
+
+    elements = {**Markdown.elements, "heading_open": LeftAlignedMarkdownHeading}
 
     def __init__(
         self,
         markup: str,
         *,
         heading_style: str,
-        highlight_style: str,
+        inline_code_style: str,
         code_theme: str,
         inline_code_theme: str,
         style: str = "none",
@@ -944,10 +982,10 @@ class ThemedMarkdown(Markdown):
             inline_code_theme=inline_code_theme,
         )
         self.heading_style = heading_style
-        self.highlight_style = highlight_style
+        self.inline_code_style = inline_code_style
 
     def __rich_console__(self, console: Console, options: Any) -> Any:
-        with console.use_theme(_markdown_theme(self.heading_style, self.highlight_style)):
+        with console.use_theme(_markdown_theme(self.heading_style, self.inline_code_style)):
             yield from super().__rich_console__(console, options)
 
 
@@ -957,21 +995,29 @@ def _markdown_highlight_style(theme: TuiTheme) -> str:
     return theme.accent
 
 
-def _markdown_theme(heading_style: str, highlight_style: str) -> Theme:
-    accent = Style.parse(heading_style)
-    highlight = Style.parse(highlight_style)
+def _markdown_inline_code_style(theme: TuiTheme) -> str:
+    if theme.name == "tau-light":
+        return "#0891b2"
+    return theme.highlight_background
+
+
+def _markdown_theme(heading_style: str, inline_code_style: str) -> Theme:
+    highlight = Style.parse(heading_style)
+    inline_code = Style.parse(inline_code_style)
     return Theme(
         {
-            "markdown.h1": accent + Style(bold=True, underline=True),
-            "markdown.h2": accent + Style(bold=True),
-            "markdown.h3": accent + Style(bold=True),
-            "markdown.h4": accent + Style(bold=True),
-            "markdown.h5": accent + Style(bold=True),
-            "markdown.h6": accent + Style(bold=True),
-            "markdown.item.bullet": accent,
-            "markdown.item.number": accent,
-            "markdown.block_quote": accent,
-            "markdown.code": highlight,
+            "markdown.h1": highlight + Style(bold=True),
+            "markdown.h2": highlight + Style(bold=True),
+            "markdown.h3": highlight + Style(bold=True),
+            "markdown.h4": highlight + Style(bold=True),
+            "markdown.h5": highlight + Style(bold=True),
+            "markdown.h6": highlight + Style(bold=True),
+            "markdown.item.bullet": highlight,
+            "markdown.item.number": highlight,
+            "markdown.block_quote": highlight,
+            "markdown.table.header": highlight + Style(bold=True),
+            "markdown.table.border": highlight,
+            "markdown.code": inline_code,
         }
     )
 

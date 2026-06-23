@@ -1851,6 +1851,13 @@ class TauTuiApp(App[None]):
         """Update responsive chrome when the terminal changes size."""
         self._update_responsive_layout(event.size.width, event.size.height)
 
+    def on_click(self, event: events.Click) -> None:
+        """Return keyboard focus to the prompt after clicks in the main TUI."""
+        if event.button != 1:
+            return
+        with suppress(NoMatches):
+            self.screen.query_one("#prompt", PromptInput).focus()
+
     @on(events.TextSelected)
     async def on_text_selected(self) -> None:
         """Optionally copy selected transcript text automatically."""
@@ -3237,6 +3244,8 @@ def _theme_css_variables(theme: TuiTheme) -> dict[str, str]:
         "tau-accent": theme.accent,
         "tau-highlight-background": theme.highlight_background,
         "tau-highlight-text": theme.highlight_text,
+        "tau-markdown-highlight": _markdown_theme_highlight_color(theme),
+        "tau-markdown-inline-code": _markdown_theme_inline_code_color(theme),
         "footer-background": theme.chrome_background,
         "footer-foreground": theme.chrome_text,
         "footer-description-background": theme.chrome_background,
@@ -3245,6 +3254,18 @@ def _theme_css_variables(theme: TuiTheme) -> dict[str, str]:
         "footer-key-foreground": theme.accent,
         "footer-item-background": theme.chrome_background,
     }
+
+
+def _markdown_theme_highlight_color(theme: TuiTheme) -> str:
+    if theme.name == "tau-light":
+        return theme.highlight_text
+    return theme.accent
+
+
+def _markdown_theme_inline_code_color(theme: TuiTheme) -> str:
+    if theme.name == "tau-light":
+        return "#0891b2"
+    return theme.highlight_background
 
 
 def _render_queued_messages(state: TuiState, *, theme: TuiTheme) -> Group:
