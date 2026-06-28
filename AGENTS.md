@@ -62,7 +62,7 @@ Do not let Textual become a dependency of the reusable agent harness.
 
 ## Documentation Expectations
 
-Each substantial phase should leave behind beginner-friendly documentation under `docs/`, explaining:
+Each substantial phase should leave behind beginner-friendly documentation under `website/src/content/docs/`, explaining:
 
 - what was added
 - why it exists

@@ -117,7 +117,7 @@ tau --version
 For development:
 
 ```bash
-uv sync --dev --group docs
+uv sync --dev
 uv run tau --version
 ```
 
@@ -288,7 +288,7 @@ frontend by consuming the same event stream.
 Set up the repository:
 
 ```bash
-uv sync --dev --group docs
+uv sync --dev
 ```
 
 Run checks:
@@ -307,34 +307,38 @@ uv run tau
 uv run tau -p "explain this repo"
 ```
 
-Run the documentation site:
+Run the documentation site (Astro Starlight, in `website/`):
 
 ```bash
-uv run --group docs mkdocs serve
+cd website
+bun install
+bun run dev
 ```
 
-Then open `http://127.0.0.1:8000`.
+Then open `http://localhost:4321/tau/`. Build the static site with `bun run build` (output in `website/dist/`).
 
 ## Documentation map
 
-- [Getting Started](docs/getting-started.md)
-- [Installation](docs/installation.md)
-- [Configuration and Files](docs/configuration.md)
-- [Providers](docs/providers.md)
-- [Architecture](docs/01-architecture.md)
-- [Architecture phase notes](docs/architecture/index.md)
-- [Agent Loop](docs/agent-loop.md)
-- [Agent Harness](docs/harness.md)
-- [Tools](docs/03-tools.md)
-- [Sessions](docs/04-sessions.md)
-- [Building a Custom TUI](docs/custom-tui.md)
-- [Roadmap](docs/00-roadmap.md)
+Source lives in `website/src/content/docs/`:
+
+- [Getting Started](website/src/content/docs/getting-started.md)
+- [Installation](website/src/content/docs/installation.md)
+- [Configuration and Files](website/src/content/docs/configuration.md)
+- [Providers](website/src/content/docs/providers.md)
+- [Architecture](website/src/content/docs/01-architecture.md)
+- [Architecture phase notes](website/src/content/docs/architecture/index.md)
+- [Agent Loop](website/src/content/docs/agent-loop.md)
+- [Agent Harness](website/src/content/docs/harness.md)
+- [Tools](website/src/content/docs/03-tools.md)
+- [Sessions](website/src/content/docs/04-sessions.md)
+- [Building a Custom TUI](website/src/content/docs/custom-tui.md)
+- [Roadmap](website/src/content/docs/00-roadmap.md)
 
 ## Project status
 
 Tau is under active development. The implementation roadmap is tracked in
 [GitHub issue #1](https://github.com/alejandro-ao/tau/issues/1), and the docs
-under `docs/architecture/` record the completed phases.
+under `website/src/content/docs/architecture/` record the completed phases.
 
 The goal is not to hide complexity. The goal is to make each part of a coding
 agent visible, testable, and understandable.
