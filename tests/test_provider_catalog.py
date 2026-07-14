@@ -59,6 +59,7 @@ def test_builtin_catalog_matches_expected_providers() -> None:
         "nvidia",
         "openrouter",
         "zai-coding-plan",
+        "zhipu-coding-plan",
         "mistral",
         "minimax",
         "minimax-cn",
