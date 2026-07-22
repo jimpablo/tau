@@ -33,11 +33,19 @@ You can install Tau with `pipx install tau-ai` or
 
 ### Upgrade Tau
 
-For a normal tool install, upgrade with:
+For a normal install, let Tau detect and reuse the installer that owns its environment:
 
 ```bash
-uv tool upgrade tau-ai
+tau update
 ```
+
+Tau reuses uv or pipx when their environment receipt is present. For uv tools,
+it installs the latest stable version explicitly so an older version pin cannot
+block the update. For ordinary Python installs, standard package metadata tells
+Tau whether to use uv or pip, and Tau targets the exact Python environment
+running it. It stops instead of
+switching installers for editable, direct-URL, Conda/Pixi, or unrecognized
+installations.
 
 If you installed a local checkout with `uv tool install --editable .`, run the
 install command again after pulling changes:
