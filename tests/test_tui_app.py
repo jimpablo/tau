@@ -86,6 +86,7 @@ from tau_coding.tui.app import (
     SkillPickerScreen,
     TauTuiApp,
     ThemePickerScreen,
+    ToolsReferenceScreen,
     TreePickerScreen,
     _activity_prompt_border_color,
     _completion_selected_render_line,
@@ -169,6 +170,7 @@ class FakeSession:
         self.scoped_model_choices: tuple[ModelChoice, ...] = ()
         self.available_providers = ("openai",)
         self.tools = tuple(create_coding_tools(cwd=self.cwd))
+        self.extension_tool_sources: dict[str, str] = {}
         self.skills = (Skill(name="review", path=self.cwd / "review.md", content="Review code"),)
         self.prompt_templates = ()
         self.context_files = (
@@ -285,6 +287,8 @@ class FakeSession:
             return CommandResult(handled=True, logout_provider=text.removeprefix("/logout "))
         if text == "/model":
             return CommandResult(handled=True, model_picker_requested=True)
+        if text == "/tools":
+            return CommandResult(handled=True, tools_picker_requested=True)
         if text in {"/scoped-models", "/scoped models"}:
             return CommandResult(handled=True, scoped_models_picker_requested=True)
         if text.startswith("/thinking "):
@@ -5170,6 +5174,116 @@ async def test_tui_app_help_uses_modal_instead_of_transcript() -> None:
         scroll = app.screen.query_one("#command-output-scroll", VerticalScroll)
         assert scroll is not None
         assert app.screen.focused is scroll
+
+
+@pytest.mark.anyio
+async def test_tui_app_tools_reference_opens_filters_and_cancels() -> None:
+    app = TauTuiApp(FakeSession())
+
+    async with app.run_test() as pilot:
+        prompt = app.query_one("#prompt", PromptInput)
+        prompt.value = "/tools"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert isinstance(app.screen, ToolsReferenceScreen)
+        assert app.screen.focused is app.screen.query_one("#tools-reference-search")
+        assert len(app.screen.visible_tools) == len(app.session.tools)
+        assert app.state.items == []
+
+        await pilot.press("b", "a", "s", "h")
+        await pilot.pause()
+        assert [tool.name for tool in app.screen.visible_tools] == ["bash"]
+        [label] = app.screen.query("#tools-reference-list Label")
+        rendered = str(label.render())
+        bash_tool = app.screen.visible_tools[0]
+        assert "bash" in rendered
+        assert "Built in" in rendered
+        assert f"{len(bash_tool.description)} chars" in rendered
+        assert bash_tool.description not in rendered
+
+        await pilot.press("enter")
+        await pilot.pause()
+        assert isinstance(app.screen, CommandOutputScreen)
+        assert app.screen.title_text == "bash — Built in"
+        assert app.screen.message == bash_tool.description
+
+        await pilot.press("escape")
+        await pilot.pause()
+        assert isinstance(app.screen, ToolsReferenceScreen)
+        app.screen.extension_sources["bash"] = "shell-tools"
+        app.screen._refresh_tools("bash")
+        await pilot.pause()
+        [label] = app.screen.query("#tools-reference-list Label")
+        assert "shell-tools" in str(label.render())
+        assert "Extension:" not in str(label.render())
+
+        await pilot.click("#tools-reference-list > ListItem")
+        await pilot.pause()
+        assert isinstance(app.screen, CommandOutputScreen)
+        assert app.screen.title_text == "bash — shell-tools"
+        await pilot.press("escape")
+        await pilot.pause()
+        assert isinstance(app.screen, ToolsReferenceScreen)
+
+        await pilot.press("escape")
+        await pilot.pause()
+        assert not isinstance(app.screen, ToolsReferenceScreen)
+        assert prompt.value == ""
+
+
+@pytest.mark.anyio
+async def test_tui_app_tools_reference_groups_origins_and_searches_extension_names() -> None:
+    session = FakeSession()
+    tools = {tool.name: tool for tool in session.tools}
+    session.tools = (tools["bash"], tools["write"], tools["read"], tools["edit"])
+    session.extension_tool_sources = {
+        "edit": "first-extension",
+        "bash": "first-extension",
+        "write": "second-extension",
+    }
+    app = TauTuiApp(session)
+
+    async with app.run_test() as pilot:
+        prompt = app.query_one("#prompt", PromptInput)
+        prompt.value = "/tools"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert isinstance(app.screen, ToolsReferenceScreen)
+        assert [tool.name for tool in app.screen.tools] == ["read", "edit", "bash", "write"]
+
+        await pilot.press(*"first-extension")
+        await pilot.pause()
+        assert [tool.name for tool in app.screen.visible_tools] == ["edit", "bash"]
+
+
+@pytest.mark.anyio
+async def test_tui_app_tools_reference_shows_empty_and_no_match_states() -> None:
+    session = FakeSession()
+    session.tools = ()
+    app = TauTuiApp(session)
+
+    async with app.run_test() as pilot:
+        prompt = app.query_one("#prompt", PromptInput)
+        prompt.value = "/tools"
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert isinstance(app.screen, ToolsReferenceScreen)
+        labels = app.screen.query("#tools-reference-list Label")
+        assert [str(label.render()) for label in labels] == ["No tools available."]
+
+    session = FakeSession()
+    app = TauTuiApp(session)
+    async with app.run_test() as pilot:
+        prompt = app.query_one("#prompt", PromptInput)
+        prompt.value = "/tools"
+        await pilot.press("enter")
+        await pilot.press("z", "z", "z")
+        await pilot.pause()
+        labels = app.screen.query("#tools-reference-list Label")
+        assert [str(label.render()) for label in labels] == ["No tools match your search."]
 
 
 @pytest.mark.anyio
